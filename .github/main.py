@@ -33,7 +33,6 @@ PRIVATE_PATTERNS = ["127.0.0.1", "localhost", "0.0.0.0", "::1", "[::1]"]
 
 # 搜索关键词列表 将 JSON 字符串还原为 Python 的 list 列表
 PREFETCH_QUERIES = json.loads(os.getenv("PREFETCH_QUERIES"))
-print(f"当前需要扫描的关键词列表是: {PREFETCH_QUERIES}")
 
 def is_private_ip(host_lower: str) -> bool:
     """过滤内网死源或本地回环地址"""
