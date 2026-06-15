@@ -1,13 +1,13 @@
-name: IPTV GitHub Scan and Push Task
+name: ZoomEye Push Task
 
 on:
   # 1. 允许通过我们上面的 Worker 远程触发
   repository_dispatch:
-    types: [trigger_iptv_scan]
+    types: [trigger_zoomeye]
 
   # 2. 同时也保留定时触发（比如每2小时，可选）
-  schedule:
-    - cron: '0 */2 * * *'
+#  schedule:
+#    - cron: '0 */2 * * *'
 
   # 3. 保留手动点击触发
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
 jobs:
   run_scanner:
     runs-on: ubuntu-latest
-    environment: "a"
+    environment: "env"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,9 +31,9 @@ jobs:
 
       - name: Run Python Script
         env:
-          PREFETCH_QUERIES: ${{ toJSON(github.event.client_payload.prefetch_queries) }}
-          MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          SOURCE_TYPE: ${{ github.event.client_payload.source_type }}
+          SOURCE_NAME: ${{ github.event.client_payload.source_name }}
           PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
           PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
         run: |
-          python .github/main.py
+          python .github/scripts/zoomeye.py

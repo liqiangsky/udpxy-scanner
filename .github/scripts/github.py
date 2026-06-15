@@ -13,7 +13,7 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger("iptv_scanner")
+logger = logging.getLogger("github_scanner")
 
 # 2. 从 GitHub Action 环境变量中获取动态参数
 GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN", "")  # 必须配置，否则搜索 API 额度极低且无法翻页
