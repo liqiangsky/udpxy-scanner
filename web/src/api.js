@@ -2,10 +2,10 @@ import axios from 'axios'
 import { toast } from '@/components/Toast'
 
 // 运行时 API 基础地址：优先取 VITE_API_BASE，默认 /api（同域代理）
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+// const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const request = axios.create({
-  baseURL: API_BASE,
+  baseURL: '/api',
   timeout: 15000
 })
 
