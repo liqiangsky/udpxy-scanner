@@ -51,7 +51,7 @@ async def fetch_via_playwright(api_url: str) -> dict:
 
             # 等待文本内容渲染（通常 JSON 直接呈现在 body 中）
             await page.wait_for_selector("body", timeout=10000)
-            content = await page.locator("body").innerText()
+            content = await page.evaluate("() => document.body.innerText")
 
             # 尝试解析为 JSON 字典
             data = json.loads(content.strip())
