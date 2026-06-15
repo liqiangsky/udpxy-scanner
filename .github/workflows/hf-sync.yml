@@ -1,0 +1,75 @@
+name: Sync Server to HF Spaces
+on:
+  push:
+    paths:
+      - 'server/**'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: "env"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install huggingface_hub
+
+      - name: Push server to HF Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+        run: |
+          python - <<'PYEOF'
+          import os, tempfile, shutil
+          from pathlib import Path
+          from huggingface_hub import HfApi
+
+          hf_token = os.getenv("HF_TOKEN")
+          space_id = os.getenv("HF_SPACE_ID")
+          if not hf_token or not space_id:
+              print("ERROR: HF_TOKEN and HF_SPACE_ID secrets required")
+              exit(1)
+
+          server_dir = Path("server")
+          if not server_dir.exists():
+              print("ERROR: server/ directory not found")
+              exit(1)
+
+          api = HfApi()
+
+          # Clone the HF Spaces repo
+          tmp_dir = tempfile.mkdtemp()
+          repo_url = f"https://huggingface.co/spaces/{space_id}"
+          print(f"Cloning {repo_url} ...")
+          api.snapshot_download(repo_id=space_id, repo_type="space", local_dir=tmp_dir, token=hf_token)
+
+          # Copy server files over (preserve Dockerfile, requirements.txt, etc.)
+          for item in server_dir.iterdir():
+              dest = Path(tmp_dir) / item.name
+              if item.is_dir():
+                  if dest.exists():
+                      shutil.rmtree(dest)
+                  shutil.copytree(item, dest)
+              else:
+                  shutil.copy2(item, dest)
+              print(f"  synced: {item.name}")
+
+          # Commit and push
+          print(f"Uploading to HF Spaces: {space_id} ...")
+          api.upload_folder(
+              folder_path=tmp_dir,
+              repo_id=space_id,
+              repo_type="space",
+              token=hf_token,
+              commit_message="ci: auto-sync server from GitHub"
+          )
+          print("Server synced to HF Spaces successfully")
+
+          shutil.rmtree(tmp_dir, ignore_errors=True)
+          PYEOF
