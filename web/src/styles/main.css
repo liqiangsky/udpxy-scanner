@@ -1,0 +1,428 @@
+/* ==========================================================================
+   0. 外部字体与 Material Symbols 图标库
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block');
+
+/* ==========================================================================
+   1. 设计变量系统
+   ========================================================================== */
+:root {
+  /* 字体 */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: 'Space Mono', "SF Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* 背景与文字 */
+  --bg-page: #F8F9FA;
+  --bg-card: #FFFFFF;
+  --bg-neutral: #F5F5F7;
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+  --text-muted: #8E8E93;
+  --text-disabled: #C5C5C7;
+
+  /* 品牌功能色 */
+  --color-blue: #007AFF;
+  --color-green: #34C759;
+  --color-orange: #FF9500;
+  --color-red: #FF3B30;
+
+  /* 状态背景 */
+  --bg-status-good: #E8F7F0;
+  --bg-status-warn: #FFF3E6;
+  --bg-status-error: #FFEBEB;
+
+  /* 圆角 */
+  --radius-card: 24px;
+  --radius-btn: 12px;
+  --radius-input: 12px;
+  --radius-badge: 20px;
+
+  /* 阴影 */
+  --shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.015);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.02);
+  --shadow-tabbar: 0 8px 32px rgba(0, 0, 0, 0.06);
+
+  /* 动效 */
+  --ease-spring: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-icon: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 布局 */
+  --max-content: 390px;
+}
+
+/* ==========================================================================
+   2. 全局重置
+   ========================================================================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body, h1, h2, h3, h4, p, figure, blockquote, dl, dd {
+  margin: 0;
+}
+
+ul, ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+img, svg, video, canvas, audio {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html, body {
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   3. 表单元素全局重置
+   ========================================================================== */
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   4. 自定义滚动条（iOS 风格）
+   ========================================================================== */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ==========================================================================
+   5. 页面布局通用
+   ========================================================================== */
+.page-container {
+  min-height: 100vh;
+  width: 100%;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: calc(16px + env(safe-area-inset-top));
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
+/* 页面标题栏 */
+.page-header {
+  width: 100%;
+  max-width: var(--max-content);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 4px 4px 0 4px;
+  position: relative;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px 0;
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   6. 表单通用
+   ========================================================================== */
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.form-item label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-left: 2px;
+  /*text-transform: uppercase;*/
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-left: 2px;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding-left: 2px;
+}
+
+/* 输入框通用 */
+.input-base {
+  background: var(--bg-neutral);
+  border: none;
+  outline: none;
+  padding: 12px;
+  border-radius: var(--radius-input);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 100%;
+  transition: background 0.2s;
+  box-sizing: border-box;
+}
+
+.input-base:focus {
+  background: #E8E8ED;
+}
+
+.input-base::placeholder {
+  color: var(--text-disabled);
+  font-weight: 400;
+}
+
+/* 带单位的输入框容器 */
+.input-with-unit {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-unit input {
+  background: var(--bg-neutral);
+  border: none;
+  outline: none;
+  padding: 12px 48px 12px 12px;
+  border-radius: var(--radius-input);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 100%;
+  transition: background 0.2s;
+  box-sizing: border-box;
+}
+
+.input-with-unit input:focus {
+  background: #E8E8ED;
+}
+
+.input-with-unit input::placeholder {
+  color: var(--text-disabled);
+  font-weight: 400;
+}
+
+.unit-text {
+  position: absolute;
+  right: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: #E8E8ED;
+  padding: 2px 6px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* 带图标的输入框 */
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-icon input {
+  background: var(--bg-neutral);
+  border: none;
+  outline: none;
+  padding: 12px 12px 12px 36px;
+  border-radius: var(--radius-input);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 100%;
+  transition: background 0.2s;
+  box-sizing: border-box;
+}
+
+.input-with-icon input:focus {
+  background: #E8E8ED;
+}
+
+.input-with-icon input::placeholder {
+  color: var(--text-disabled);
+  font-weight: 400;
+}
+
+.input-prefix {
+  position: absolute;
+  left: 12px;
+  font-size: 16px !important;
+  color: var(--text-disabled);
+}
+
+/* select 箭头图标 */
+.select-with-arrow {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%238E8E93' d='M0 0h10L5 6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+/* ==========================================================================
+   7. 按钮通用
+   ========================================================================== */
+.btn-action {
+  border: none;
+  outline: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-action:active {
+  transform: scale(0.96);
+}
+
+.btn-primary {
+  background: var(--color-blue);
+  color: #FFFFFF;
+  padding: 8px 14px;
+  border-radius: var(--radius-btn);
+  font-size: 13.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-primary:active {
+  transform: scale(0.96);
+  background: #0066D6;
+}
+
+/* 底部 TabBar */
+.bottom-tabbar {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 358px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(40px) saturate(180%);
+  border-radius: 20px;
+  box-shadow: var(--shadow-tabbar);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 99;
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.25s ease;
+  width: 30%;
+}
+
+.tab-item.active {
+  color: var(--color-blue);
+}
+
+.tab-icon {
+  font-size: 22px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  transition: all 0.25s var(--ease-icon);
+}
+
+.tab-item.active .tab-icon {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  transform: scale(1.08);
+}
+
+.tab-text {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
