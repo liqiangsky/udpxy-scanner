@@ -19,15 +19,28 @@ export async function onRequest(context) {
   const backendUrl = `${BACKEND_URL}/api/${path}${url.search}`;
 
   // 转发请求头
+  // ==================== 核心修复：请求头清洗与伪装 ====================
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    // 不转发 hop-by-hop 头
-    if (!["host", "connection", "content-length"].includes(key.toLowerCase())) {
-      headers.set(key, value);
+    const lowerKey = key.toLowerCase();
+    // 1. 过滤掉 hop-by-hop 头以及可能引发解压崩溃的 accept-encoding
+    if (!["host", "connection", "content-length", "accept-encoding"].includes(lowerKey)) {
+      // 2. 极其关键：死死卡住所有以 "cf-" 开头的 Cloudflare 特征头，以及真实 IP 头
+      if (!lowerKey.startsWith("cf-") && lowerKey !== "true-client-ip") {
+        headers.set(key, value);
+      }
     }
   });
-  // 覆盖 Host 为目标域名
+
+  // 3. 覆盖 Host 为目标域名
   headers.set("Host", new URL(BACKEND_URL).host);
+
+  // 4. 伪装标准的 PC 浏览器 User-Agent，让 Hugging Face 网关误认为是直连访问
+  headers.set(
+    "User-Agent",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  );
+  // ==================================================================
 
   try {
     const response = await fetch(backendUrl, {
