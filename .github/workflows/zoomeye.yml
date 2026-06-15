@@ -25,9 +25,10 @@ jobs:
         with:
           python-version: '3.10'  #  已修正为 python-version
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
-          pip install aiohttp
+          pip install playwright aiohttp
+          playwright install chromium
 
       - name: Run Python Script
         env:
