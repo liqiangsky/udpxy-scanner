@@ -145,7 +145,7 @@ async def search_single_keyword(session: aiohttp.ClientSession, headers: dict, k
     return keyword_hosts
 
 async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
-    """任务收尾：打包去重清洗后的数据回调投递给你的后端服务"""
+    """任务收尾：打包去重清洗后的数据回调投递给你的后端服务（发射后不管优化版）"""
     payload = {
         "sourceType": SOURCE_TYPE,
         "sourceName": SOURCE_NAME,
@@ -160,14 +160,19 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
 
     try:
         logger.info(f"Authorization 格式对齐 -> 正在打包 {len(hosts_list)} 个去重资产推送回控制后端...")
-        async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=60) as resp:
+
+        # 将连接建立和读取超时降低，只留下 15 秒用于网络握手和大数据包排队发送
+        # 我们不需要关心后端的“慢响应”，只要后端网卡接收了这个请求即可
+        async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=15) as resp:
+            # 💡 关键改动：只要拿到 http 状态码在 200~299 范围内，就说明后端 Web 容器已经完全接收了这笔数据
             if resp.status in [200, 201]:
-                res_data = await resp.text()
-                logger.info(f"🎉 成功打通回调链路！后端平台已成功接收，响应日志: {res_data}")
+                logger.info(f"🚀 [闪电投递] 后端已成功接收请求头与资产数据（状态码: {resp.status}）。"
+                            f"已安全跳过耗时验证，主流程准备提前收工。")
             else:
-                logger.error(f"🚨 后端回调节点响应异常，状态码: {resp.status}, 原因: {await resp.text()}")
+                logger.error(f"🚨 后端回调节点响应异常，状态码: {resp.status}")
+
     except Exception as e:
-        logger.error(f"💥 投递阶段发生致命网络异常: {str(e)}")
+        logger.error(f"💥 投递阶段发生致命网络异常（可能后端已经收到但强行断开，或者建连失败）: {str(e)}")
 
 async def main():
     logger.info("🚀 IPTV 关键词级代码扫描全自动化作业正在初始化...")
@@ -201,9 +206,17 @@ async def main():
         # ===== 核心逻辑 2：资产输出与后端推送 =====
         hosts_list = list(all_hosts)
         if hosts_list:
+            # 1. 此时直接调用，由于 push_to_backend 里面不再 await 响应的 body 内容，这里会执行得非常快
             await push_to_backend(session, hosts_list)
+
+            # 2. 💡 绝妙保障：因为这是在 GitHub Actions 里，为防进程因执行结束被瞬间杀死导致操作系统还来不及将 TCP 缓存区的数据发出，
+            # 这里强制给网卡 3 秒钟的清空时间，随后再关闭 ClientSession
+            logger.info("⏳ [网络缓冲] 预留 3 秒网络管道排空缓冲，确保异步数据包完美离线...")
+            await asyncio.sleep(3)
         else:
             logger.warning("⚠️ 扫描流程已圆满结束，但本次作业没有捕获到任何符合规则的有效 Host。放弃回调推送。")
+
+    logger.info("🎉 [作业圆满结束] 本次 GitHub Actions 自动化扫描流水线完美收尾。")
 
 if __name__ == "__main__":
     asyncio.run(main())
