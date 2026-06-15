@@ -11,12 +11,12 @@ export async function onRequest(context) {
   const { request, params, env } = context;
 
   // 从 Pages 环境变量读取， fallback 到明文兜底
-  const API_BACKEND_URL = env.API_BACKEND_URL;
+  const BACKEND_URL = env.BACKEND_URL;
 
   // 构造后端真实 URL
   const url = new URL(request.url);
   const path = params.path ? params.path.join("/") : "";
-  const backendUrl = `${API_BACKEND_URL}/api/${path}${url.search}`;
+  const backendUrl = `${BACKEND_URL}/api/${path}${url.search}`;
 
   // 转发请求头
   const headers = new Headers();
@@ -27,7 +27,7 @@ export async function onRequest(context) {
     }
   });
   // 覆盖 Host 为目标域名
-  headers.set("Host", new URL(API_BACKEND_URL).host);
+  headers.set("Host", new URL(BACKEND_URL).host);
 
   try {
     const response = await fetch(backendUrl, {
