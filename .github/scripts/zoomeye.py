@@ -105,7 +105,6 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
     headers = {
        "Content-Type": "application/json",
        "X-API-Key": PUSH_API_KEY,
-       "X-Callback-Token": "000"
     }
 
     logger.info(f"🚀 [后端推送] 正在打包 {len(hosts_list)} 个去重资产推送回控制后端...")

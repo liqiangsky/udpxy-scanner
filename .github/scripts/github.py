@@ -18,7 +18,7 @@ logger = logging.getLogger("github_scanner")
 # 2. 从 GitHub Action 环境变量中获取动态参数
 GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN", "")  # 必须配置，否则搜索 API 额度极低且无法翻页
 
-# 💡 你的后端推送回调配置
+# 后端推送回调配置
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
 PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
 
@@ -144,37 +144,36 @@ async def search_single_keyword(session: aiohttp.ClientSession, headers: dict, k
     return keyword_hosts
 
 async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
-    “””任务收尾：将去重资产分批（每批 500 个）回调投递给后端”””
+    """将去重资产分批（每批 500 个）回调投递给后端"""
     BATCH_SIZE = 500
     headers = {
-        “Content-Type”: “application/json”,
-        “X-API-Key”: PUSH_API_KEY,
-        “X-Callback-Token”: “000”
+        "Content-Type": "application/json",
+        "X-API-Key": PUSH_API_KEY,
     }
 
     total = len(hosts_list)
     for i in range(0, total, BATCH_SIZE):
         batch = hosts_list[i:i + BATCH_SIZE]
         payload = {
-            “sourceType”: SOURCE_TYPE,
-            “sourceName”: SOURCE_NAME,
-            “hosts”: [{“host”: h} for h in batch]
+            "sourceType": SOURCE_TYPE,
+            "sourceName": SOURCE_NAME,
+            "hosts": [{"host": h} for h in batch]
         }
 
         batch_num = i // BATCH_SIZE + 1
         total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
 
         try:
-            logger.info(f”Authorization 格式对齐 -> 正在推送第 {batch_num}/{total_batches} 批（{len(batch)} 个资产）...”)
+            logger.info(f"Authorization 格式对齐 -> 正在推送第 {batch_num}/{total_batches} 批（{len(batch)} 个资产）...")
 
             async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=30) as resp:
                 if resp.status in [200, 201]:
-                    logger.info(f”🚀 [批次 {batch_num}/{total_batches}] 后端已成功接收（状态码: {resp.status}）。”)
+                    logger.info(f"🚀 [批次 {batch_num}/{total_batches}] 后端已成功接收（状态码: {resp.status}）。")
                 else:
-                    logger.error(f”🚨 后端回调节点响应异常，状态码: {resp.status}”)
+                    logger.error(f"🚨 后端回调节点响应异常，状态码: {resp.status}")
 
         except Exception as e:
-            logger.error(f”💥 第 {batch_num}/{total_batches} 批投递异常: {str(e)}”)
+            logger.error(f"💥 第 {batch_num}/{total_batches} 批投递异常: {str(e)}")
 
         # 批次间隔 1 秒，避免洪峰
         if i + BATCH_SIZE < total:
