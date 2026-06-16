@@ -185,7 +185,7 @@ async def main():
 
     headers = {
         "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "udpxy-radar-actions/1.0"
+        "User-Agent": "udpxy-scanner-actions/1.0"
     }
 
     if GITHUB_TOKEN:
