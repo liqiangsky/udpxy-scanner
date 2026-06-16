@@ -110,9 +110,11 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
     logger.info(f"🚀 [后端推送] 正在打包 {len(hosts_list)} 个去重资产推送回控制后端...")
     try:
         # 只等待连接建立和请求头成功发送到 TCP 缓冲区，不等待后端慢入库导致超时
-        async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=10) as resp:
+        async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=10, allow_redirects=False) as resp:
             if resp.status in [200, 201, 202]:
                 logger.info(f"🎉 [后端推送] 成功打通回调链路！数据已移交至网络缓冲区 (状态码: {resp.status})")
+            elif resp.status in [301, 302, 307, 308]:
+                logger.info(f"↪ [后端推送] 收到重定向 {resp.status} -> {resp.headers.get('Location', '?')}，忽略并跳过。")
             else:
                 logger.error(f"🚨 [后端推送] 后端回调节点响应异常，状态码: {resp.status}")
     except Exception as e:
