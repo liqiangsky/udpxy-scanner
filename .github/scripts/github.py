@@ -144,34 +144,41 @@ async def search_single_keyword(session: aiohttp.ClientSession, headers: dict, k
     return keyword_hosts
 
 async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
-    """任务收尾：打包去重清洗后的数据回调投递给你的后端服务（发射后不管优化版）"""
-    payload = {
-        "sourceType": SOURCE_TYPE,
-        "sourceName": SOURCE_NAME,
-        "hosts": [{"host": h} for h in hosts_list]
-    }
-
+    “””任务收尾：将去重资产分批（每批 500 个）回调投递给后端”””
+    BATCH_SIZE = 500
     headers = {
-        "Content-Type": "application/json",
-        "X-API-Key": PUSH_API_KEY,
-        "X-Callback-Token": "000"
+        “Content-Type”: “application/json”,
+        “X-API-Key”: PUSH_API_KEY,
+        “X-Callback-Token”: “000”
     }
 
-    try:
-        logger.info(f"Authorization 格式对齐 -> 正在打包 {len(hosts_list)} 个去重资产推送回控制后端...")
+    total = len(hosts_list)
+    for i in range(0, total, BATCH_SIZE):
+        batch = hosts_list[i:i + BATCH_SIZE]
+        payload = {
+            “sourceType”: SOURCE_TYPE,
+            “sourceName”: SOURCE_NAME,
+            “hosts”: [{“host”: h} for h in batch]
+        }
 
-        # 将连接建立和读取超时降低，只留下 15 秒用于网络握手和大数据包排队发送
-        # 我们不需要关心后端的“慢响应”，只要后端网卡接收了这个请求即可
-        async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=15) as resp:
-            # 💡 关键改动：只要拿到 http 状态码在 200~299 范围内，就说明后端 Web 容器已经完全接收了这笔数据
-            if resp.status in [200, 201]:
-                logger.info(f"🚀 [闪电投递] 后端已成功接收请求头与资产数据（状态码: {resp.status}）。"
-                            f"已安全跳过耗时验证，主流程准备提前收工。")
-            else:
-                logger.error(f"🚨 后端回调节点响应异常，状态码: {resp.status}")
+        batch_num = i // BATCH_SIZE + 1
+        total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
 
-    except Exception as e:
-        logger.error(f"💥 投递阶段发生致命网络异常（可能后端已经收到但强行断开，或者建连失败）: {str(e)}")
+        try:
+            logger.info(f”Authorization 格式对齐 -> 正在推送第 {batch_num}/{total_batches} 批（{len(batch)} 个资产）...”)
+
+            async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=30) as resp:
+                if resp.status in [200, 201]:
+                    logger.info(f”🚀 [批次 {batch_num}/{total_batches}] 后端已成功接收（状态码: {resp.status}）。”)
+                else:
+                    logger.error(f”🚨 后端回调节点响应异常，状态码: {resp.status}”)
+
+        except Exception as e:
+            logger.error(f”💥 第 {batch_num}/{total_batches} 批投递异常: {str(e)}”)
+
+        # 批次间隔 1 秒，避免洪峰
+        if i + BATCH_SIZE < total:
+            await asyncio.sleep(1)
 
 async def main():
     logger.info("🚀 IPTV 关键词级代码扫描全自动化作业正在初始化...")
