@@ -205,8 +205,9 @@ async def api_source_push(request: Request):
     source_type = body.get("sourceType", "unknown")
     hosts = body.get("hosts", [])
 
-    trace_id = f"push_{source_type}_{int(time.time())}"
-    logger.info(f"📥 [trace:{trace_id}] 收到 {len(hosts)} 个资产")
+    # 支持外部服务传回 traceId（订阅拉取链路追踪）
+    trace_id = body.get("traceId", "") or f"push_{source_type}_{int(time.time())}"
+    logger.info(f"📥 [trace:{trace_id}] 收到 {len(hosts)} 个资产 ({source_type})")
 
     # 后台处理，立即返回
     asyncio.create_task(process_source_data(source_type, hosts, trace_id=trace_id))
@@ -214,6 +215,7 @@ async def api_source_push(request: Request):
     return {
         "ok": True,
         "sourceType": source_type,
+        "traceId": trace_id,
         "received": len(hosts),
         "msg": "数据已接收，后台处理中"
     }

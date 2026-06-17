@@ -18,6 +18,8 @@ async def fetch_subscription(name: str, uid: str, url: str, trace_id: str = "") 
     qs = parse_qs(parsed.query, keep_blank_values=True)
     qs["sourceType"] = [uid]
     qs["sourceName"] = [name]
+    if trace_id:
+        qs["traceId"] = [trace_id]
     new_qs = urlencode(qs, doseq=True)
     fetch_url = urlunparse(parsed._replace(query=new_qs))
 

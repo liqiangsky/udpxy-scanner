@@ -31,6 +31,9 @@ SOURCE_NAME = os.getenv("SOURCE_NAME", "")
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
 PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
 
+# 调用方传入的 trace ID（通过 client_payload 传递）
+TRACE_ID = os.getenv("TRACE_ID", "")
+
 SOURCE_URL = "https://www.zoomeye.ai/api/search?q=YXBwPSJ1ZHB4eSBtdWx0aWNhc3QgVURQLXRvLUhUVFAiICYmIGNvdW50cnk9IuS4reWbvSI%3D"
 
 
@@ -97,6 +100,7 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
         return
 
     payload = {
+        "traceId": TRACE_ID,
         "sourceType": SOURCE_TYPE,
         "sourceName": SOURCE_NAME,
         "hosts": hosts_list
@@ -109,7 +113,6 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
 
     logger.info(f"🚀 [后端推送] 正在打包 {len(hosts_list)} 个去重资产推送回控制后端...")
     try:
-        # 只等待连接建立和请求头成功发送到 TCP 缓冲区，不等待后端慢入库导致超时
         async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=10, allow_redirects=True) as resp:
             if resp.status in [200, 201, 202]:
                 logger.info(f"🎉 [后端推送] 成功打通回调链路！数据已移交至网络缓冲区 (状态码: {resp.status})")
@@ -123,6 +126,7 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
 
 
 async def main():
+    logger.info(f"🚀 ZoomEye 数据采集与清洗全自动化作业启动...")
 
     # 1. 通过 Playwright 抓取防爬下的原始 JSON
     raw_data = await fetch_via_playwright(SOURCE_URL)

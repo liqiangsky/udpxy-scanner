@@ -22,6 +22,9 @@ GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN", "")  # 必须配置，否则搜索 A
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
 PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
 
+# 调用方传入的 trace ID（通过 client_payload 传递）
+TRACE_ID = os.getenv("TRACE_ID", "")
+
 # 数据来源
 SOURCE_TYPE = "github"
 SOURCE_NAME = "GitHub"
@@ -155,6 +158,7 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
     for i in range(0, total, BATCH_SIZE):
         batch = hosts_list[i:i + BATCH_SIZE]
         payload = {
+            "traceId": TRACE_ID,
             "sourceType": SOURCE_TYPE,
             "sourceName": SOURCE_NAME,
             "hosts": [{"host": h} for h in batch]
