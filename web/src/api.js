@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { toast } from '@/components/Toast'
+import { useAuthStore } from '@/stores/auth'
 
 // 运行时 API 基础地址：优先取 VITE_API_BASE，默认 /api（同域代理）
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
@@ -22,9 +23,12 @@ request.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const status = error.response?.status
-    // 未认证 → 跳转首页
+    // 未认证 → 清除状态并跳转登录
     if (status === 401 || status === 403) {
-      window.location.href = '/'
+      const authStore = useAuthStore()
+      authStore.isLoggedIn = false
+      localStorage.removeItem('auth_token')
+      window.location.href = '/login'
       return Promise.reject(error)
     }
     const msg = error.response?.data?.detail || error.message || '请求失败'
