@@ -7,7 +7,7 @@ from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 logger = logging.getLogger("订阅拉取")
 
 
-async def fetch_subscription(name: str, uid: str, url: str) -> List[dict]:
+async def fetch_subscription(name: str, uid: str, url: str, trace_id: str = "") -> List[dict]:
     """
     请求订阅 URL，自动追加 sourceType 和 sourceName 参数。
     期望格式：{"sourceType": "...", "sourceName": "...", "hosts": [{"host": "ip:port"}, ...]}
@@ -21,7 +21,8 @@ async def fetch_subscription(name: str, uid: str, url: str) -> List[dict]:
     new_qs = urlencode(qs, doseq=True)
     fetch_url = urlunparse(parsed._replace(query=new_qs))
 
-    logger.info(f"📡 [订阅:{name}] 开始拉取: {fetch_url}")
+    tag = f"[trace:{trace_id}] " if trace_id else ""
+    logger.info(f"📡 {tag}[订阅:{name}] 开始拉取: {fetch_url}")
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -31,14 +32,14 @@ async def fetch_subscription(name: str, uid: str, url: str) -> List[dict]:
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
                 if resp.status != 200:
-                    logger.warning(f"⚠️ [订阅:{name}] 请求失败，状态码: {resp.status}")
+                    logger.warning(f"⚠️ {tag}[订阅:{name}] 请求失败，状态码: {resp.status}")
                     return []
 
                 result = await resp.json()
 
             hosts_data = result.get("hosts", [])
             if not hosts_data:
-                logger.warning(f"⚠️ [订阅:{name}] 返回 hosts 为空")
+                logger.warning(f"⚠️ {tag}[订阅:{name}] 返回 hosts 为空")
                 return []
 
             raw_sources = []
@@ -51,9 +52,9 @@ async def fetch_subscription(name: str, uid: str, url: str) -> List[dict]:
                         "geoOperator": item.get("geoOperator", "")
                     })
 
-            logger.info(f"📄 [订阅:{name}] -> {len(raw_sources)} 条")
+            logger.info(f"📄 {tag}[订阅:{name}] -> {len(raw_sources)} 条")
             return raw_sources
 
     except Exception as e:
-        logger.error(f"❌ [订阅:{name}] 请求异常: {e}")
+        logger.error(f"❌ {tag}[订阅:{name}] 请求异常: {e}")
         return []

@@ -95,7 +95,7 @@ def api_fetch_subscription(sub_id: int):
     def run_fetch():
         async def _do():
             logger.info(f"📡 [trace:{trace_id}] 开始拉取订阅 {sub_info['name']}")
-            sources = await fetch_subscription(sub_info["name"], sub_info["uid"], sub_info["url"])
+            sources = await fetch_subscription(sub_info["name"], sub_info["uid"], sub_info["url"], trace_id=trace_id)
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
                 await process_source_data(sub_info["uid"], hosts_data, trace_id=trace_id)
@@ -122,11 +122,13 @@ async def api_fetch_all_subscriptions():
 
     results = []
     for row in rows:
-        sources = await fetch_subscription(row["name"], row["uid"], row["url"])
+        trace_id = f"sub_{row['uid']}_{int(time.time())}"
+        logger.info(f"📡 [trace:{trace_id}] 开始拉取订阅 {row['name']}")
+        sources = await fetch_subscription(row["name"], row["uid"], row["url"], trace_id=trace_id)
         fetched = 0
         if sources:
             hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-            fetched = await process_source_data(row["uid"], hosts_data)
+            fetched = await process_source_data(row["uid"], hosts_data, trace_id=trace_id)
         results.append({"uid": row["uid"], "name": row["name"], "fetched": fetched})
 
     from datetime import datetime

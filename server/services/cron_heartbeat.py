@@ -205,7 +205,7 @@ async def handle_heartbeat() -> dict:
             logger.info(f"⏰ [trace:{trace_id}] 订阅触发 {sub['name']} -> cron: {fetch_cron}")
             from services.subscription_fetcher import fetch_subscription
             from services.source_cache import process_source_data
-            sources = await fetch_subscription(sub["name"], sub["uid"], sub["url"])
+            sources = await fetch_subscription(sub["name"], sub["uid"], sub["url"], trace_id=trace_id)
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
                 await process_source_data(sub["uid"], hosts_data, trace_id=trace_id)
