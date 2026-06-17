@@ -21,6 +21,12 @@ request.interceptors.request.use((config) => {
 request.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    const status = error.response?.status
+    // 未认证 → 跳转首页
+    if (status === 401 || status === 403) {
+      window.location.href = '/'
+      return Promise.reject(error)
+    }
     const msg = error.response?.data?.detail || error.message || '请求失败'
     toast.error(msg)
     console.error('API 请求失败:', error)
