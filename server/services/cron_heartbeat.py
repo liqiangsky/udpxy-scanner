@@ -12,7 +12,7 @@ from core.engine import trigger_background_queue
 from core.status import task_runner
 from services.source_cache import cache_sources
 
-logger = logging.getLogger("udpxy_scanner")
+logger = logging.getLogger("定时任务")
 
 
 def cron_field_match(pattern: str, value: str) -> bool:
@@ -200,13 +200,21 @@ async def handle_heartbeat() -> dict:
     for sub in subscriptions:
         fetch_cron = sub["fetchCron"]
         if cron_match(fetch_cron, cron_now) and _should_exec(f"sub_{sub['id']}", now):
-            logger.info(f"⏰ [订阅触发] {sub['name']} -> cron: {fetch_cron}")
+            import time
+            trace_id = f"cron_{sub['uid']}_{int(time.time())}"
+            logger.info(f"⏰ [trace:{trace_id}] 订阅触发 {sub['name']} -> cron: {fetch_cron}")
             from services.subscription_fetcher import fetch_subscription
             from services.source_cache import process_source_data
             sources = await fetch_subscription(sub["name"], sub["uid"], sub["url"])
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-                await process_source_data(sub["uid"], hosts_data)
+                await process_source_data(sub["uid"], hosts_data, trace_id=trace_id)
+            from datetime import datetime
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
+                    (datetime.now().isoformat(), sub["id"])
+                )
             triggered.append({"task": f"sub_{sub['id']}", "name": sub["name"]})
 
     return triggered

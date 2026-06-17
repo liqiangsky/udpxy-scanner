@@ -6,7 +6,7 @@ import logging
 from typing import List, Optional
 from db.database import get_cache_db
 
-logger = logging.getLogger("udpxy_scanner")
+logger = logging.getLogger("数据缓存")
 
 # 中国省份/地区白名单（含港澳台），用于过滤非国内 IP
 _CN_REGIONS = {
@@ -20,12 +20,13 @@ _CN_REGIONS = {
 }
 
 
-def cache_sources(source_type: str, sources: List[dict]):
+def cache_sources(source_type: str, sources: List[dict], trace_id: str = ""):
     """
     将数据写入 source_cache 公共表。
     每个 source dict 至少包含 "host"，可选 "geoRegion", "geoOperator"。
     geoRegion 为空或不在中国省份白名单内的数据不入库。
     """
+    tag = f"[trace:{trace_id}] " if trace_id else ""
     if not sources:
         return
 
@@ -48,7 +49,7 @@ def cache_sources(source_type: str, sources: List[dict]):
                 rows
             )
             regions = set(r[2] for r in rows)
-            logger.info(f"💾 [source_cache] {source_type} 写入 {len(rows)} 条, 地区分布: {regions}")
+            logger.info(f"💾 {tag}{source_type} 写入 {len(rows)} 条, 地区分布: {regions}")
 
 
 def get_cached_hosts(source_type: str, region: str = "") -> List[str]:
@@ -94,7 +95,7 @@ def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: s
         )
 
 
-async def process_source_data(source_type: str, hosts: List[dict]) -> int:
+async def process_source_data(source_type: str, hosts: List[dict], trace_id: str = "") -> int:
     """
     统一数据入库入口：geoip 富化 → 区域过滤 → 写入 source_cache。
     外部推送接口和订阅拉取都调用此函数。
@@ -103,13 +104,19 @@ async def process_source_data(source_type: str, hosts: List[dict]) -> int:
     from services.geoip import enrich_geo_batch
     import aiohttp
 
+    tag = f"[trace:{trace_id}] " if trace_id else ""
+
     if not hosts:
         return 0
 
+    logger.info(f"🌐 {tag}{source_type} 开始 geoip 富化（{len(hosts)} 条）")
+
     async with aiohttp.ClientSession() as session:
-        enriched = await enrich_geo_batch(session, hosts)
+        enriched = await enrich_geo_batch(session, hosts, trace_id=trace_id)
+
+    logger.info(f"✅ {tag}{source_type} geoip 富化完成，写入 {len(enriched)} 条")
 
     if enriched:
-        cache_sources(source_type, enriched)
+        cache_sources(source_type, enriched, trace_id)
 
     return len(enriched)

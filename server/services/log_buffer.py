@@ -20,14 +20,13 @@ class LogBufferHandler(logging.Handler):
 
 
 def setup_log_buffer():
-    """将自定义 Handler 挂载到 udpxy_scanner logger 上"""
+    """将自定义 Handler 挂载到根 logger，捕获所有模块日志"""
     handler = LogBufferHandler()
     handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        "%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     ))
-    logger = logging.getLogger("udpxy_scanner")
-    logger.addHandler(handler)
+    logging.getLogger().addHandler(handler)
 
 
 def get_recent_logs(lines: int = 100, level: str = None) -> list:

@@ -12,7 +12,7 @@ from services.source_cache import get_cached_hosts, cache_sources, get_cached_ge
 from services.validator import verify_single_host
 from services.geoip import enrich_geo_batch
 
-logger = logging.getLogger("udpxy_scanner")
+logger = logging.getLogger("扫描引擎")
 
 # SQLite 写锁：序列化所有并发写入，防止 database is locked
 _db_write_lock = threading.Lock()

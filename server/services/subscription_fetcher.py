@@ -4,7 +4,7 @@ import logging
 from typing import List
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 
-logger = logging.getLogger("udpxy_scanner")
+logger = logging.getLogger("订阅拉取")
 
 
 async def fetch_subscription(name: str, uid: str, url: str) -> List[dict]:

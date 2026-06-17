@@ -7,7 +7,7 @@ from datetime import datetime
 
 from db.database import get_iptv_db, get_setting
 
-logger = logging.getLogger("udpxy_scanner")
+logger = logging.getLogger("组播源")
 router = APIRouter()
 
 

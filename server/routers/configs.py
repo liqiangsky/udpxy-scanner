@@ -6,7 +6,7 @@ from typing import Optional
 from core.status import task_runner
 from core.engine import trigger_background_queue, enqueue_background_queue
 
-logger = logging.getLogger("udpxy_scanner")
+logger = logging.getLogger("推送接口")
 router = APIRouter()
 
 
@@ -187,6 +187,8 @@ async def api_source_push(request: Request):
     统一数据入库入口，所有数据（外部推送和订阅拉取）都经过相同处理。
     需要 X-API-Key 头部认证（在全局设置中配置）。
     """
+    import asyncio
+    import time
     from services.source_cache import process_source_data
 
     # API Key 认证
@@ -203,14 +205,17 @@ async def api_source_push(request: Request):
     source_type = body.get("sourceType", "unknown")
     hosts = body.get("hosts", [])
 
-    logger.info(f"📥 [数据源推送] sourceType={source_type}, hosts={len(hosts)}")
-    fetched = await process_source_data(source_type, hosts)
+    trace_id = f"push_{source_type}_{int(time.time())}"
+    logger.info(f"📥 [trace:{trace_id}] 收到 {len(hosts)} 个资产")
+
+    # 后台处理，立即返回
+    asyncio.create_task(process_source_data(source_type, hosts, trace_id=trace_id))
 
     return {
         "ok": True,
         "sourceType": source_type,
-        "fetched": fetched,
-        "hosts": [h["host"] for h in hosts if isinstance(h, dict)]
+        "received": len(hosts),
+        "msg": "数据已接收，后台处理中"
     }
 
 

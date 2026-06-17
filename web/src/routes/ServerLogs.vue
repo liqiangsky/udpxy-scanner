@@ -23,7 +23,34 @@
             :class="{ active: logLevel === lv }"
             @click="logLevel = lv"
           >{{ lv === 'ALL' ? '全部' : lv }}</span>
-          <span class="log-count">{{ logs.length }} 条</span>
+          <span class="log-count">{{ filteredLogs.length }} / {{ logs.length }} 条</span>
+        </div>
+
+        <div class="log-module-chips" v-if="modules.length > 0">
+          <span
+            class="log-module-chip"
+            :class="{ active: moduleFilter === '' }"
+            @click="moduleFilter = ''"
+          >全部模块</span>
+          <span
+            v-for="m in modules"
+            :key="m"
+            class="log-module-chip"
+            :class="{ active: moduleFilter === m }"
+            @click="moduleFilter = m"
+          >{{ m }}</span>
+        </div>
+
+        <div class="log-trace-search">
+          <span class="material-symbols-outlined trace-search-icon">tag</span>
+          <input
+            v-model="traceSearch"
+            class="trace-search-input"
+            placeholder="搜索 trace ID..."
+          />
+          <button v-if="traceSearch" class="trace-clear-btn" @click="traceSearch = ''">
+            <span class="material-symbols-outlined">close</span>
+          </button>
         </div>
       </div>
 
@@ -36,9 +63,13 @@
           <span class="material-symbols-outlined log-empty-icon">inbox</span>
           <p>暂无日志</p>
         </div>
-        <div v-else v-for="(line, i) in logs" :key="i" class="log-line" :class="getLogLevelClass(line)">
+        <div v-else-if="filteredLogs.length === 0" class="log-empty">
+          <span class="material-symbols-outlined log-empty-icon">search_off</span>
+          <p>无匹配日志</p>
+        </div>
+        <div v-else v-for="(line, i) in filteredLogs" :key="i" class="log-line" :class="getLogLevelClass(line)">
           <span class="log-time">{{ parseLogLine(line).time }}</span>
-          <span class="log-text">{{ parseLogLine(line).content }}</span>
+          <span class="log-text">{{ parseLogLine(line).display }}</span>
         </div>
       </div>
     </div>
@@ -47,11 +78,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import request from '@/api'
 
 const logs = ref([])
 const logLevel = ref('ALL')
+const moduleFilter = ref('')
+const traceSearch = ref('')
 const refreshing = ref(false)
 const initialized = ref(false)
 const logViewerRef = ref(null)
@@ -59,10 +92,50 @@ const logViewerRef = ref(null)
 let pollTimer = null
 
 const parseLogLine = (line) => {
-  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(.*)$/)
-  if (match) return { time: match[1], content: match[2] }
-  return { time: '', content: line }
+  // 格式: 2026-06-17 12:34:56 [LEVEL] [模块名] 内容 [trace:xxx]
+  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[\w+\]\s+\[([^\]]+)\]\s+(.*)$/)
+  if (match) {
+    return {
+      time: match[1],
+      module: match[2],
+      content: match[3],
+      display: `[${match[2]}] ${match[3]}`
+    }
+  }
+  // 回退：只解析时间
+  const fallback = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(.*)$/)
+  if (fallback) return { time: fallback[1], module: '', content: fallback[2], display: fallback[2] }
+  return { time: '', module: '', content: line, display: line }
 }
+
+const modules = computed(() => {
+  const set = new Set()
+  for (const line of logs.value) {
+    const parsed = parseLogLine(line)
+    if (parsed.module) set.add(parsed.module)
+  }
+  return [...set].sort()
+})
+
+const filteredLogs = computed(() => {
+  let result = logs.value
+
+  // 模块过滤
+  if (moduleFilter.value) {
+    result = result.filter(line => {
+      const parsed = parseLogLine(line)
+      return parsed.module === moduleFilter.value
+    })
+  }
+
+  // trace ID 搜索
+  if (traceSearch.value) {
+    const term = traceSearch.value.toLowerCase()
+    result = result.filter(line => line.toLowerCase().includes(term))
+  }
+
+  return result
+})
 
 const fetchLogs = async () => {
   try {
@@ -108,9 +181,8 @@ const refreshLogs = async () => {
 }
 
 const getLogLevelClass = (line) => {
-  const { content } = parseLogLine(line)
-  if (content.includes('[ERROR]') || content.includes('[EXCEPTION]') || content.includes('[CRITICAL]')) return 'log-error'
-  if (content.includes('[WARNING]')) return 'log-warning'
+  if (line.includes('[ERROR]') || line.includes('[EXCEPTION]') || line.includes('[CRITICAL]')) return 'log-error'
+  if (line.includes('[WARNING]')) return 'log-warning'
   return ''
 }
 
@@ -218,6 +290,9 @@ onUnmounted(() => {
 
 .log-filters {
   padding: 0 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .log-level-chips {
   display: flex;
@@ -244,6 +319,73 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-muted);
   margin-left: auto;
+  white-space: nowrap;
+}
+
+.log-module-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.log-module-chip {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: rgba(0, 122, 255, 0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.15s ease;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.log-module-chip.active {
+  background: rgba(0, 122, 255, 0.12);
+  color: var(--color-blue);
+  border-color: rgba(0, 122, 255, 0.2);
+}
+
+.log-trace-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-neutral);
+  border-radius: 10px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.log-trace-search:focus-within {
+  border-color: rgba(0, 122, 255, 0.3);
+}
+.trace-search-icon {
+  font-size: 16px !important;
+  color: var(--text-muted);
+}
+.trace-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-primary);
+  outline: none;
+  min-width: 0;
+}
+.trace-search-input::placeholder {
+  color: var(--text-muted);
+}
+.trace-clear-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.trace-clear-btn .material-symbols-outlined {
+  font-size: 14px !important;
+  color: var(--text-muted);
 }
 
 .log-viewer {
