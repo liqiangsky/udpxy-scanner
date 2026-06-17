@@ -209,11 +209,10 @@ async def handle_heartbeat() -> dict:
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
                 await process_source_data(sub["uid"], hosts_data, trace_id=trace_id)
-            from datetime import datetime
             with get_db() as conn:
                 conn.execute(
                     "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
-                    (datetime.now().isoformat(), sub["id"])
+                    (datetime.datetime.now().isoformat(), sub["id"])
                 )
             triggered.append({"task": f"sub_{sub['id']}", "name": sub["name"]})
 
