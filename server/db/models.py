@@ -28,3 +28,4 @@ class ApiSubscriptionCreate(BaseModel):
     url: str
     enabled: bool = True
     fetchCron: str = ""
+

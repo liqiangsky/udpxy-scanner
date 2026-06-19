@@ -22,7 +22,7 @@ export default defineConfig({
     proxy: {
       // 当前端请求以 /api 开头时，Vite 会拦截并悄悄帮转发给后端
       '/api': {
-        target: '', // 你的 FastAPI 后端真实运行地址
+        target: 'http://localhost:7860', // 你的 FastAPI 后端真实运行地址
         changeOrigin: true,              // 允许跨域欺骗，把请求头中的 Host 悄悄换成后端的地址
         // rewrite: (path) => path       // 注意：因为你的后端路由本身就带有 /api 前缀（如 /api/configs），所以这里【不需要】重写抹去 /api
       }

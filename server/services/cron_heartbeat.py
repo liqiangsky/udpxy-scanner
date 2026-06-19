@@ -76,7 +76,7 @@ async def execute_recheck() -> int:
     from services.validator import verify_single_host
 
     with get_iptv_db() as conn:
-        active_sources = conn.execute("SELECT * FROM iptv_list").fetchall()
+        active_sources = [dict(r) for r in conn.execute("SELECT * FROM iptv_list").fetchall()]
 
     if not active_sources:
         return 0
@@ -90,6 +90,8 @@ async def execute_recheck() -> int:
 
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             failed_list = []
+            success_items = []
+            now_ms = int(__import__("time").time() * 1000)
 
             def dummy_should_stop():
                 return False
@@ -106,25 +108,31 @@ async def execute_recheck() -> int:
                     result = await verify_single_host(session, host_raw, target_val, timeout_sec, dummy_should_stop, protocol=proto_val)
 
                     if result:
-                        with get_iptv_db() as conn:
-                            conn.execute(
-                                "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
-                                (result["delay"], int(__import__("time").time() * 1000), result["protocol"], source["id"])
-                            )
-                        return
-
-                    failed_list.append(source)
+                        success_items.append((result["delay"], now_ms, result["protocol"], source["id"]))
+                    else:
+                        failed_list.append(source)
 
             concurrency_sem = asyncio.Semaphore(concurrency)
             await asyncio.gather(*(recheck_worker(s) for s in active_sources))
+
+            if success_items:
+                with get_iptv_db() as conn:
+                    conn.executemany(
+                        "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
+                        success_items
+                    )
 
             eliminated = 0
 
             if failed_list:
                 logger.info(f"⚠️ [二次复测] 首次失败 {len(failed_list)} 个，开始二次验证")
 
+                second_success = []
+                second_failed_ids = []
+                second_failed_hosts = []
+                now2_ms = int(__import__("time").time() * 1000)
+
                 async def second_recheck(source):
-                    nonlocal eliminated
                     async with concurrency_sem:
                         if task_runner.should_pause_recheck():
                             while task_runner.should_pause_recheck():
@@ -136,22 +144,34 @@ async def execute_recheck() -> int:
                         result = await verify_single_host(session, host_raw, target_val, timeout_sec, dummy_should_stop, protocol=proto_val)
 
                         if result:
-                            with get_iptv_db() as conn:
-                                conn.execute(
-                                    "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
-                                    (result["delay"], int(__import__("time").time() * 1000), result["protocol"], source["id"])
-                                )
-                            logger.info(f"✅ [二次恢复] {source['host']} 二次复测成功")
-                            return
-
-                        logger.warning(f"🗑️ [彻底淘汰] {source['host']} (两次复测均失败)")
-                        with get_iptv_db() as conn:
-                            conn.execute("DELETE FROM iptv_list WHERE id=?", (source["id"],))
-                        with get_cache_db() as conn:
-                            conn.execute("DELETE FROM source_cache WHERE host=?", (source["host"],))
-                        eliminated += 1
+                            second_success.append((result["delay"], now2_ms, result["protocol"], source["id"]))
+                        else:
+                            second_failed_ids.append((source["id"],))
+                            second_failed_hosts.append(source["host"])
 
                 await asyncio.gather(*(second_recheck(s) for s in failed_list))
+
+                if second_success:
+                    with get_iptv_db() as conn:
+                        conn.executemany(
+                            "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
+                            second_success
+                        )
+                    logger.info(f"✅ [二次恢复] {len(second_success)} 个二次复测成功")
+
+                if second_failed_ids:
+                    with get_iptv_db() as conn:
+                        conn.executemany(
+                            "DELETE FROM iptv_list WHERE id=?",
+                            second_failed_ids
+                        )
+                    with get_cache_db() as conn:
+                        conn.executemany(
+                            "DELETE FROM source_cache WHERE host=?",
+                            [(h,) for h in second_failed_hosts]
+                        )
+                    eliminated = len(second_failed_ids)
+                    logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个源（两次复测均失败）")
 
             logger.info(f"🧹 [复测完成] {len(active_sources)} 个活源复测完毕，淘汰 {eliminated} 个")
             return eliminated
@@ -200,15 +220,13 @@ async def handle_heartbeat() -> dict:
     for sub in subscriptions:
         fetch_cron = sub["fetchCron"]
         if cron_match(fetch_cron, cron_now) and _should_exec(f"sub_{sub['id']}", now):
-            import time
-            trace_id = f"cron_{sub['uid']}_{int(time.time())}"
-            logger.info(f"⏰ [trace:{trace_id}] 订阅触发 {sub['name']} -> cron: {fetch_cron}")
+            logger.info(f"⏰ 订阅触发 {sub['name']} -> cron: {fetch_cron}")
             from services.subscription_fetcher import fetch_subscription
             from services.source_cache import process_source_data
-            sources = await fetch_subscription(sub["name"], sub["uid"], sub["url"], trace_id=trace_id)
+            sources = await fetch_subscription(sub["name"], sub["uid"], sub["url"])
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-                await process_source_data(sub["uid"], hosts_data, trace_id=trace_id)
+                await process_source_data(sub["uid"], hosts_data)
             with get_db() as conn:
                 conn.execute(
                     "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",

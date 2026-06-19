@@ -1,4 +1,7 @@
 import logging
+import time
+import asyncio
+import aiohttp
 from fastapi import APIRouter, HTTPException, Query, Request
 from db.database import get_db, get_setting, get_cache_db
 from db.models import ConfigCreateOrUpdate, SourceCacheDelete
@@ -138,7 +141,6 @@ def api_get_progress():
 
 @router.get("/source-cache/list")
 def api_source_cache_list(sourceType: str = Query(None)):
-    """查询 source_cache 表数据，传 sourceType 返回指定列表，不传按分组返回"""
     with get_cache_db() as conn:
         if sourceType:
             rows = conn.execute(
@@ -147,12 +149,7 @@ def api_source_cache_list(sourceType: str = Query(None)):
             ).fetchall()
             return [dict(r) for r in rows]
         rows = conn.execute("SELECT * FROM source_cache ORDER BY sourceType, id").fetchall()
-    groups = {}
-    for r in rows:
-        d = dict(r)
-        st = d.pop("sourceType")
-        groups.setdefault(st, []).append(d)
-    return groups
+    return [dict(r) for r in rows]
 
 
 @router.post("/source-cache/delete")
@@ -188,10 +185,8 @@ async def api_source_push(request: Request):
     需要 X-API-Key 头部认证（在全局设置中配置）。
     """
     import asyncio
-    import time
     from services.source_cache import process_source_data
 
-    # API Key 认证
     api_key = request.headers.get("X-API-Key", "")
     if not api_key:
         raise HTTPException(401, "缺少 X-API-Key 头部")
@@ -205,17 +200,13 @@ async def api_source_push(request: Request):
     source_type = body.get("sourceType", "unknown")
     hosts = body.get("hosts", [])
 
-    # 支持外部服务传回 traceId（订阅拉取链路追踪）
-    trace_id = body.get("traceId", "") or f"push_{source_type}_{int(time.time())}"
-    logger.info(f"📥 [trace:{trace_id}] 收到 {len(hosts)} 个资产 ({source_type})")
+    logger.info(f"📥 收到 {len(hosts)} 个资产 ({source_type})")
 
-    # 后台处理，立即返回
-    asyncio.create_task(process_source_data(source_type, hosts, trace_id=trace_id))
+    asyncio.create_task(process_source_data(source_type, hosts))
 
     return {
         "ok": True,
         "sourceType": source_type,
-        "traceId": trace_id,
         "received": len(hosts),
         "msg": "数据已接收，后台处理中"
     }

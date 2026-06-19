@@ -1,10 +1,14 @@
 import sqlite3
 import os
+import time
 from contextlib import contextmanager
 
 DB_PATH = os.getenv("DB_PATH", "udpxy_scanner.db")
 CACHE_DB_PATH = os.getenv("CACHE_DB_PATH", "source_cache.db")
 IPTV_DB_PATH = os.getenv("IPTV_DB_PATH", "iptv_list.db")
+
+_settings_cache = {}
+_settings_cache_ttl = 30
 
 
 def init_cache_db():
@@ -22,6 +26,7 @@ def init_cache_db():
             createdAt TEXT DEFAULT (datetime('now'))
         );
         CREATE UNIQUE INDEX IF NOT EXISTS idx_source_cache_unique ON source_cache(sourceType, host);
+        CREATE INDEX IF NOT EXISTS idx_source_cache_host ON source_cache(host);
     """)
     conn.commit()
     conn.close()
@@ -54,6 +59,8 @@ def init_iptv_db():
         CREATE UNIQUE INDEX IF NOT EXISTS idx_iptv_unique ON iptv_list(host, target, channelName);
         CREATE INDEX IF NOT EXISTS idx_region_operator ON iptv_list(region, operator);
         CREATE INDEX IF NOT EXISTS idx_geo ON iptv_list(geoRegion, geoOperator);
+        CREATE INDEX IF NOT EXISTS idx_iptv_host ON iptv_list(host);
+        CREATE INDEX IF NOT EXISTS idx_iptv_sourceType ON iptv_list(sourceType);
     """)
     conn.commit()
     conn.close()
@@ -222,14 +229,18 @@ def get_iptv_db():
 
 
 def get_setting(key: str, default: str) -> str:
+    now = time.time()
+    cached = _settings_cache.get(key)
+    if cached and now - cached[1] < _settings_cache_ttl:
+        return cached[0]
     try:
         with get_db() as conn:
             row = conn.execute(
                 "SELECT value FROM settings WHERE key=?",
                 (key,)
             ).fetchone()
-
-            return row["value"] if row else default
-
+            val = row["value"] if row else default
+            _settings_cache[key] = (val, now)
+            return val
     except Exception:
         return default

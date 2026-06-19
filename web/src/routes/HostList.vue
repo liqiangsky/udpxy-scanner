@@ -96,6 +96,7 @@ const operatorMap = reactive({})
 const loadPool = async () => {
   loading.value = true
   try {
+    authStore.init()
     const params = {}
     if (filterForm.region) {
       params.region = filterForm.region

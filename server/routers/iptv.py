@@ -22,9 +22,6 @@ def api_get_iptv_pool(
     where_clauses = []
     params = []
 
-    #
-    # 业务归属过滤
-    #
     if region:
         where_clauses.append("region = ?")
         params.append(region)
@@ -33,9 +30,6 @@ def api_get_iptv_pool(
         where_clauses.append("operator = ?")
         params.append(operator)
 
-    #
-    # GEOIP 过滤
-    #
     if geo_region:
         where_clauses.append("geoRegion = ?")
         params.append(geo_region)
@@ -44,197 +38,88 @@ def api_get_iptv_pool(
         where_clauses.append("geoOperator = ?")
         params.append(geo_operator)
 
-    where_sql = (
-        " AND ".join(where_clauses)
-        if where_clauses
-        else "1=1"
-    )
+    where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
     with get_iptv_db() as conn:
-
-        rows = conn.execute(f"""
-            SELECT *
+        group_rows = conn.execute(f"""
+            SELECT region, operator,
+                   COUNT(*) AS cnt,
+                   ROUND(AVG(CASE WHEN delay>0 THEN delay END)) AS avg_delay
             FROM iptv_list
             WHERE {where_sql}
-
-            ORDER BY
-                region ASC,
-                operator ASC,
-                delay ASC,
-                updateTime DESC
+            GROUP BY region, operator
+            ORDER BY region ASC, operator ASC
         """, params).fetchall()
 
-    #
-    # 分组
-    #
-    groups = {}
+        detail_rows = conn.execute(f"""
+            SELECT id, host, protocol, target, channelName, delay,
+                   sourceType, sourceName, region, operator,
+                   geoRegion, geoOperator, createTime, updateTime
+            FROM iptv_list
+            WHERE {where_sql}
+            ORDER BY region ASC, operator ASC, delay ASC, updateTime DESC
+        """, params).fetchall()
 
-    for row in rows:
+    total_active = len(detail_rows)
 
+    group_map = {}
+    for gr in group_rows:
+        r_val = gr["region"] or ""
+        o_val = gr["operator"] or ""
+        key = f"{r_val} / {o_val}"
+        group_map[key] = {
+            "region": r_val,
+            "operator": o_val,
+            "count": gr["cnt"],
+            "avgLatency": gr["avg_delay"] or 0,
+            "heads": []
+        }
+
+    for row in detail_rows:
         region_val = row["region"] or ""
         operator_val = row["operator"] or ""
-
         group_key = f"{region_val} / {operator_val}"
 
-        if group_key not in groups:
-
-            groups[group_key] = {
-                "region": region_val,
-                "operator": operator_val,
-
-                "count": 0,
-                "avgLatency": 0,
-
-                "heads": []
-            }
-
-        #
-        # URL
-        #
         protocol = row["protocol"] or "udp"
         target = row["target"] or ""
-
         if target.startswith("/"):
             target = target[1:]
+        play_url = f"http://{row['host']}/{protocol}/{target}"
 
-        play_url = (
-            f"http://{row['host']}/{protocol}/{target}"
-        )
-
-        #
-        # 更新时间
-        #
         try:
-
-            last_seen = datetime.fromtimestamp(
-                row["updateTime"] / 1000.0
-            ).strftime("%Y-%m-%d %H:%M:%S")
-
+            last_seen = datetime.fromtimestamp(row["updateTime"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
-
             last_seen = ""
 
         try:
-
-            create_time = datetime.fromtimestamp(
-                row["createTime"] / 1000.0
-            ).strftime("%Y-%m-%d %H:%M:%S")
-
+            create_time = datetime.fromtimestamp(row["createTime"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
-
             create_time = ""
 
-        #
-        # 节点信息
-        #
-        groups[group_key]["heads"].append({
-
+        group_map[group_key]["heads"].append({
             "id": row["id"],
-
-            #
-            # 来源
-            #
             "sourceType": row["sourceType"] or "",
             "sourceName": row["sourceName"] or "",
-
-            #
-            # 播放
-            #
             "url": play_url,
             "host": row["host"],
-
             "protocol": protocol,
             "target": target,
-
-            #
-            # 频道
-            #
             "channelName": row["channelName"],
-
-            #
-            # 延迟
-            #
             "latencyMs": row["delay"],
-
-            #
-            # 业务归属
-            #
             "region": region_val,
             "operator": operator_val,
-
-            #
-            # GEOIP
-            #
             "geoRegion": row["geoRegion"] or "",
             "geoOperator": row["geoOperator"] or "",
-
-            #
-            # 时间
-            #
             "createTime": create_time,
             "lastSeen": last_seen,
             "updateTime": row["updateTime"]
         })
 
-    #
-    # 统计
-    #
-    result_list = []
-
-    for group in groups.values():
-
-        latencies = [
-            h["latencyMs"]
-            for h in group["heads"]
-            if h["latencyMs"] is not None
-        ]
-
-        group["count"] = len(group["heads"])
-
-        group["avgLatency"] = (
-            round(sum(latencies) / len(latencies))
-            if latencies
-            else 0
-        )
-
-        #
-        # 默认按延迟排序
-        #
-        group["heads"].sort(
-            key=lambda x: (
-                x["latencyMs"]
-                if x["latencyMs"] is not None
-                else 999999
-            )
-        )
-
-        result_list.append(group)
-
-    #
-    # 组排序
-    #
-    result_list.sort(
-        key=lambda x: (
-            x["region"],
-            x["operator"]
-        )
-    )
+    result_list = list(group_map.values())
 
     return {
-
-        #
-        # 总活跃源
-        #
-        "totalActiveHeads": len(rows),
-
-        #
-        # 分组数
-        #
+        "totalActiveHeads": total_active,
         "totalGroups": len(result_list),
-
-        #
-        # 数据
-        #
         "groups": result_list
     }
 

@@ -8,25 +8,19 @@ from db.database import get_cache_db
 
 logger = logging.getLogger("数据缓存")
 
-# 中国省份/地区白名单（含港澳台），用于过滤非国内 IP
 _CN_REGIONS = {
-    "北京", "天津", "上海", "重庆",
-    "河北", "山西", "辽宁", "吉林", "黑龙江",
-    "江苏", "浙江", "安徽", "福建", "江西", "山东",
-    "河南", "湖北", "湖南", "广东", "海南",
-    "四川", "贵州", "云南", "陕西", "甘肃", "青海",
-    "台湾", "内蒙古", "广西", "西藏", "宁夏", "新疆",
-    "香港", "澳门"
+    "北京", "上海", "天津", "重庆",
+    "浙江", "江苏", "广东", "山东",
+    "安徽", "福建", "湖北", "湖南",
+    "河南", "河北", "江西", "山西",
+    "四川", "云南", "贵州", "西藏",
+    "陕西", "甘肃", "青海", "宁夏",
+    "新疆", "黑龙江", "吉林", "辽宁",
+    "广西", "内蒙古", "海南"
 }
 
 
-def cache_sources(source_type: str, sources: List[dict], trace_id: str = ""):
-    """
-    将数据写入 source_cache 公共表。
-    每个 source dict 至少包含 "host"，可选 "geoRegion", "geoOperator"。
-    geoRegion 为空或不在中国省份白名单内的数据不入库。
-    """
-    tag = f"[trace:{trace_id}] " if trace_id else ""
+def cache_sources(source_type: str, sources: List[dict]):
     if not sources:
         return
 
@@ -37,7 +31,6 @@ def cache_sources(source_type: str, sources: List[dict], trace_id: str = ""):
             if s["host"] in seen:
                 continue
             region = s.get("geoRegion", "")
-            # 过滤：region 为空或国外
             if not region or region not in _CN_REGIONS:
                 continue
             seen.add(s["host"])
@@ -49,13 +42,10 @@ def cache_sources(source_type: str, sources: List[dict], trace_id: str = ""):
                 rows
             )
             regions = set(r[2] for r in rows)
-            logger.info(f"💾 {tag}{source_type} 写入 {len(rows)} 条, 地区分布: {regions}")
+            logger.info(f"💾 {source_type} 写入 {len(rows)} 条, 地区分布: {regions}")
 
 
 def get_cached_hosts(source_type: str, region: str = "") -> List[str]:
-    """
-    从 source_cache 读取缓存 host 列表，按 geoRegion 过滤。
-    """
     with get_cache_db() as conn:
         if region:
             rows = conn.execute(
@@ -70,24 +60,36 @@ def get_cached_hosts(source_type: str, region: str = "") -> List[str]:
         return [r["host"] for r in rows]
 
 
-def get_cached_geo(host: str) -> dict | None:
-    """
-    查询单个 host 的缓存 geo 信息，不存在返回 None。
-    """
+def get_cached_geo_batch(hosts: List[str]) -> dict:
+    if not hosts:
+        return {}
     with get_cache_db() as conn:
-        row = conn.execute(
-            "SELECT geoRegion, geoOperator FROM source_cache WHERE host=?",
-            (host,)
-        ).fetchone()
-        if row:
-            return {"geoRegion": row["geoRegion"], "geoOperator": row["geoOperator"]}
-        return None
+        placeholders = ",".join("?" for _ in hosts)
+        rows = conn.execute(
+            f"SELECT host, geoRegion, geoOperator FROM source_cache WHERE host IN ({placeholders})",
+            hosts
+        ).fetchall()
+        result = {}
+        for row in rows:
+            if row["geoRegion"] or row["geoOperator"]:
+                result[row["host"]] = {"geoRegion": row["geoRegion"], "geoOperator": row["geoOperator"]}
+        return result
+
+
+def get_existing_iptv_hosts_batch(hosts: List[str]) -> set:
+    if not hosts:
+        return set()
+    from db.database import get_iptv_db
+    with get_iptv_db() as conn:
+        placeholders = ",".join("?" for _ in hosts)
+        rows = conn.execute(
+            f"SELECT DISTINCT host FROM iptv_list WHERE host IN ({placeholders})",
+            hosts
+        ).fetchall()
+        return {row["host"] for row in rows}
 
 
 def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: str):
-    """
-    写入单个 host 的 geo 信息到 source_cache。
-    """
     with get_cache_db() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO source_cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
@@ -95,28 +97,19 @@ def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: s
         )
 
 
-async def process_source_data(source_type: str, hosts: List[dict], trace_id: str = "") -> int:
-    """
-    统一数据入库入口：geoip 富化 → 区域过滤 → 写入 source_cache。
-    外部推送接口和订阅拉取都调用此函数。
-    返回实际写入条数。
-    """
+async def process_source_data(source_type: str, hosts: List[dict]) -> int:
     from services.geoip import enrich_geo_batch
-    import aiohttp
-
-    tag = f"[trace:{trace_id}] " if trace_id else ""
 
     if not hosts:
         return 0
 
-    logger.info(f"🌐 {tag}{source_type} 开始 geoip 富化（{len(hosts)} 条）")
+    logger.info(f"🌐 {source_type} 开始 geoip 富化（{len(hosts)} 条）")
 
-    async with aiohttp.ClientSession() as session:
-        enriched = await enrich_geo_batch(session, hosts, trace_id=trace_id)
+    enriched = await enrich_geo_batch(hosts)
 
-    logger.info(f"✅ {tag}{source_type} geoip 富化完成，写入 {len(enriched)} 条")
+    logger.info(f"✅ {source_type} geoip 富化完成，写入 {len(enriched)} 条")
 
     if enriched:
-        cache_sources(source_type, enriched, trace_id)
+        cache_sources(source_type, enriched)
 
     return len(enriched)

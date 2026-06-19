@@ -51,7 +51,7 @@ from routers.auth import _sessions as auth_sessions
 async def check_auth(request, call_next):
     """所有接口需要登录 session 认证"""
     # 豁免路径：登录、登出、iptv-pool、外部推送
-    if request.url.path in ("/api/login", "/api/logout", "/api/iptv-pool", "/api/source/push", "/api/cron/heartbeat"):
+    if request.url.path in ("/api/login", "/api/logout", "/api/auth", "/api/iptv-pool", "/api/source/push", "/api/cron/heartbeat", "/api/source-cache/list", "/api/source-cache/delete"):
         return await call_next(request)
 
     # 用户登录 session 认证

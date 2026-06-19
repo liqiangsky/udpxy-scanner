@@ -7,24 +7,15 @@ from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 logger = logging.getLogger("订阅拉取")
 
 
-async def fetch_subscription(name: str, uid: str, url: str, trace_id: str = "") -> List[dict]:
-    """
-    请求订阅 URL，自动追加 sourceType 和 sourceName 参数。
-    期望格式：{"sourceType": "...", "sourceName": "...", "hosts": [{"host": "ip:port"}, ...]}
-    返回原始 host 列表（不含 geoip 富化，由调用方统一处理）。
-    """
-    # 追加查询参数
+async def fetch_subscription(name: str, uid: str, url: str) -> List[dict]:
     parsed = urlparse(url)
     qs = parse_qs(parsed.query, keep_blank_values=True)
     qs["sourceType"] = [uid]
     qs["sourceName"] = [name]
-    if trace_id:
-        qs["traceId"] = [trace_id]
     new_qs = urlencode(qs, doseq=True)
     fetch_url = urlunparse(parsed._replace(query=new_qs))
 
-    tag = f"[trace:{trace_id}] " if trace_id else ""
-    logger.info(f"📡 {tag}[订阅:{name}] 开始拉取: {fetch_url}")
+    logger.info(f"📡 [订阅:{name}] 开始拉取: {fetch_url}")
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -34,14 +25,14 @@ async def fetch_subscription(name: str, uid: str, url: str, trace_id: str = "") 
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
                 if resp.status != 200:
-                    logger.warning(f"⚠️ {tag}[订阅:{name}] 请求失败，状态码: {resp.status}")
+                    logger.warning(f"⚠️ [订阅:{name}] 请求失败，状态码: {resp.status}")
                     return []
 
                 result = await resp.json()
 
             hosts_data = result.get("hosts", [])
             if not hosts_data:
-                logger.warning(f"⚠️ {tag}[订阅:{name}] 返回 hosts 为空")
+                logger.warning(f"⚠️ [订阅:{name}] 返回 hosts 为空")
                 return []
 
             raw_sources = []
@@ -54,9 +45,9 @@ async def fetch_subscription(name: str, uid: str, url: str, trace_id: str = "") 
                         "geoOperator": item.get("geoOperator", "")
                     })
 
-            logger.info(f"📄 {tag}[订阅:{name}] -> {len(raw_sources)} 条")
+            logger.info(f"📄 [订阅:{name}] -> {len(raw_sources)} 条")
             return raw_sources
 
     except Exception as e:
-        logger.error(f"❌ {tag}[订阅:{name}] 请求异常: {e}")
+        logger.error(f"❌ [订阅:{name}] 请求异常: {e}")
         return []

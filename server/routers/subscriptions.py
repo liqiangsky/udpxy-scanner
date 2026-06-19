@@ -2,7 +2,6 @@
 import logging
 import threading
 import asyncio
-import time
 from fastapi import APIRouter, HTTPException
 from db.database import get_db, get_cache_db
 from db.models import ApiSubscriptionCreate
@@ -90,22 +89,21 @@ def api_fetch_subscription(sub_id: int):
         raise HTTPException(404, "订阅不存在或未启用")
 
     sub_info = dict(row)
-    trace_id = f"sub_{sub_info['uid']}_{int(time.time())}"
 
     def run_fetch():
         async def _do():
-            logger.info(f"📡 [trace:{trace_id}] 开始拉取订阅 {sub_info['name']}")
-            sources = await fetch_subscription(sub_info["name"], sub_info["uid"], sub_info["url"], trace_id=trace_id)
+            logger.info(f"📡 开始拉取订阅 {sub_info['name']}")
+            sources = await fetch_subscription(sub_info["name"], sub_info["uid"], sub_info["url"])
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-                await process_source_data(sub_info["uid"], hosts_data, trace_id=trace_id)
+                await process_source_data(sub_info["uid"], hosts_data)
             from datetime import datetime
             with get_db() as conn:
                 conn.execute(
                     "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
                     (datetime.now().isoformat(), sub_info["id"])
                 )
-            logger.info(f"✅ [trace:{trace_id}] 订阅 {sub_info['name']} 拉取完成")
+            logger.info(f"✅ 订阅 {sub_info['name']} 拉取完成")
         asyncio.run(_do())
 
     threading.Thread(target=run_fetch, daemon=True).start()
@@ -122,13 +120,12 @@ async def api_fetch_all_subscriptions():
 
     results = []
     for row in rows:
-        trace_id = f"sub_{row['uid']}_{int(time.time())}"
-        logger.info(f"📡 [trace:{trace_id}] 开始拉取订阅 {row['name']}")
-        sources = await fetch_subscription(row["name"], row["uid"], row["url"], trace_id=trace_id)
+        logger.info(f"📡 开始拉取订阅 {row['name']}")
+        sources = await fetch_subscription(row["name"], row["uid"], row["url"])
         fetched = 0
         if sources:
             hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-            fetched = await process_source_data(row["uid"], hosts_data, trace_id=trace_id)
+            fetched = await process_source_data(row["uid"], hosts_data)
         results.append({"uid": row["uid"], "name": row["name"], "fetched": fetched})
 
     from datetime import datetime

@@ -8,7 +8,7 @@ from typing import List
 
 from db.database import get_db, get_cache_db, get_iptv_db, get_setting
 from core.status import task_runner
-from services.source_cache import get_cached_hosts, cache_sources, get_cached_geo, cache_host_geo
+from services.source_cache import get_cached_hosts, cache_sources, cache_host_geo, get_cached_geo_batch, get_existing_iptv_hosts_batch
 from services.validator import verify_single_host
 from services.geoip import enrich_geo_batch
 
@@ -128,7 +128,20 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
 
                     valid_count = 0
                     _valid_lock = threading.Lock()
-                    _valid_hosts = []  # 收集验证通过的 host
+                    _valid_hosts = []
+
+                    all_host_items = [h[0] for h in candidate_hosts]
+                    existing_hosts = get_existing_iptv_hosts_batch(all_host_items)
+                    logger.info(f"🔍 [去重] {len(existing_hosts)}/{len(all_host_items)} 个 host 已在活源池中")
+
+                    candidate_hosts_filtered = [
+                        h for h in candidate_hosts if h[0] not in existing_hosts
+                    ]
+
+                    if not candidate_hosts_filtered:
+                        logger.info(f"⏭️ [全部重复] {config['name']} 所有候选 host 已在活源池中，跳过验证")
+                    else:
+                        logger.info(f"⚡ [验证中] 去重后 {len(candidate_hosts_filtered)} 个候选，并发数={run_concurrency}")
 
                     sem = asyncio.Semaphore(run_concurrency)
 
@@ -141,17 +154,6 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                         async with sem:
 
                             try:
-                                #
-                                # 去重检查：如果 host 已在 iptv_list 中则跳过
-                                #
-                                with get_iptv_db() as conn:
-                                    existing = conn.execute(
-                                        "SELECT 1 FROM iptv_list WHERE host=?",
-                                        (host_item,)
-                                    ).fetchone()
-                                if existing:
-                                    return
-
                                 res = await verify_single_host(
                                     session,
                                     host_item,
@@ -163,7 +165,6 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                 if not res:
                                     return
 
-                                # 收集验证通过的结果（携带来源标签）
                                 with _valid_lock:
                                     _valid_hosts.append({
                                         "host": host_item,
@@ -179,18 +180,19 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                         return
 
                     await asyncio.gather(
-                        *(worker(h) for h in candidate_hosts)
+                        *(worker(h) for h in candidate_hosts_filtered)
                     )
 
                     if _valid_hosts:
-                        # 预填充已有 geo 缓存，跳过重复查询
+                        valid_host_list = [h["host"] for h in _valid_hosts]
+                        cached_geo_map = get_cached_geo_batch(valid_host_list)
                         for host_item in _valid_hosts:
-                            cached = get_cached_geo(host_item["host"])
+                            cached = cached_geo_map.get(host_item["host"])
                             if cached:
                                 host_item.update(cached)
 
                         # 统一 geoip 富化（已有 geo 的会自动跳过）
-                        enriched = await enrich_geo_batch(session, _valid_hosts)
+                        enriched = await enrich_geo_batch(_valid_hosts)
 
                         # 新 geo 回写 source_cache
                         new_geo_count = 0
@@ -204,36 +206,17 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
 
                         now_stamp = int(time.time() * 1000)
 
-                        # 入 iptv_list 活源池
                         _db_write_lock.acquire()
                         try:
                             with get_iptv_db() as conn:
+                                batch_rows = []
                                 for item in enriched:
                                     host_item = item["host"]
                                     if ":" in host_item:
                                         ip_val, port_val = host_item.rsplit(":", 1)
                                     else:
                                         ip_val, port_val = host_item, 80
-
-                                    conn.execute("""
-                                        INSERT INTO iptv_list (
-                                            host, ip, port,
-                                            sourceType, sourceName,
-                                            region, operator,
-                                            geoRegion, geoOperator,
-                                            delay, protocol,
-                                            target, channelName,
-                                            createTime, updateTime
-                                        ) VALUES (
-                                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                                        )
-                                        ON CONFLICT(host, target, channelName)
-                                        DO UPDATE SET
-                                            delay = excluded.delay,
-                                            updateTime = excluded.updateTime,
-                                            geoRegion = excluded.geoRegion,
-                                            geoOperator = excluded.geoOperator
-                                    """, (
+                                    batch_rows.append((
                                         host_item, ip_val, int(port_val),
                                         item["sourceType"], item["sourceName"],
                                         config.get("templateRegion", ""),
@@ -242,8 +225,29 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                         item["delay"], item["protocol"],
                                         config["templateTargetAddress"],
                                         config["templateTargetName"],
-                                        now_stamp, now_stamp
+                                        now_stamp, now_stamp,
+                                        item["delay"], now_stamp,
+                                        item["geoRegion"], item["geoOperator"]
                                     ))
+                                conn.executemany("""
+                                    INSERT INTO iptv_list (
+                                        host, ip, port,
+                                        sourceType, sourceName,
+                                        region, operator,
+                                        geoRegion, geoOperator,
+                                        delay, protocol,
+                                        target, channelName,
+                                        createTime, updateTime
+                                    ) VALUES (
+                                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                                    )
+                                    ON CONFLICT(host, target, channelName)
+                                    DO UPDATE SET
+                                        delay = ?,
+                                        updateTime = ?,
+                                        geoRegion = ?,
+                                        geoOperator = ?
+                                """, batch_rows)
                         finally:
                             _db_write_lock.release()
 
