@@ -24,13 +24,14 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/components/Toast'
 
 defineOptions({ name: 'LoginPage' })
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const form = reactive({ password: '' })
@@ -43,7 +44,8 @@ const handleLogin = async () => {
   try {
     await authStore.login(form.password)
     toast.success('登录成功')
-    router.replace('/')
+    const redirect = route.query.redirect || '/'
+    router.replace(redirect)
   } catch (e) {
     errorMsg.value = e?.response?.data?.detail || '登录失败，请检查用户名和密码'
     toast.error(errorMsg.value)

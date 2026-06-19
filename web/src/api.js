@@ -26,9 +26,15 @@ request.interceptors.response.use(
     // 未认证 → 清除状态并跳转登录
     if (status === 401 || status === 403) {
       const authStore = useAuthStore()
+      const hadToken = !!localStorage.getItem('auth_token')
       authStore.isLoggedIn = false
       localStorage.removeItem('auth_token')
-      window.location.href = '/login'
+      if (hadToken) {
+        toast.error('登录已过期，请重新登录')
+      }
+      const currentPath = window.location.pathname
+      const redirect = currentPath !== '/login' ? currentPath : ''
+      window.location.href = redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'
       return Promise.reject(error)
     }
     const msg = error.response?.data?.detail || error.message || '请求失败'

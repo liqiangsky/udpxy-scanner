@@ -41,17 +41,6 @@
           >{{ m }}</span>
         </div>
 
-        <div class="log-trace-search">
-          <span class="material-symbols-outlined trace-search-icon">tag</span>
-          <input
-            v-model="traceSearch"
-            class="trace-search-input"
-            placeholder="搜索 trace ID..."
-          />
-          <button v-if="traceSearch" class="trace-clear-btn" @click="traceSearch = ''">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
       </div>
 
       <div class="log-viewer" ref="logViewerRef">
@@ -84,7 +73,6 @@ import request from '@/api'
 const logs = ref([])
 const logLevel = ref('ALL')
 const moduleFilter = ref('')
-const traceSearch = ref('')
 const refreshing = ref(false)
 const initialized = ref(false)
 const logViewerRef = ref(null)
@@ -92,7 +80,7 @@ const logViewerRef = ref(null)
 let pollTimer = null
 
 const parseLogLine = (line) => {
-  // 格式: 2026-06-17 12:34:56 [LEVEL] [模块名] 内容 [trace:xxx]
+  // 格式: 2026-06-17 12:34:56 [LEVEL] [模块名] 内容
   const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[\w+\]\s+\[([^\]]+)\]\s+(.*)$/)
   if (match) {
     return {
@@ -126,12 +114,6 @@ const filteredLogs = computed(() => {
       const parsed = parseLogLine(line)
       return parsed.module === moduleFilter.value
     })
-  }
-
-  // trace ID 搜索
-  if (traceSearch.value) {
-    const term = traceSearch.value.toLowerCase()
-    result = result.filter(line => line.toLowerCase().includes(term))
   }
 
   return result
@@ -344,48 +326,6 @@ onUnmounted(() => {
   background: rgba(0, 122, 255, 0.12);
   color: var(--color-blue);
   border-color: rgba(0, 122, 255, 0.2);
-}
-
-.log-trace-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-neutral);
-  border-radius: 10px;
-  padding: 4px 10px;
-  border: 1px solid transparent;
-  transition: border-color 0.15s ease;
-}
-.log-trace-search:focus-within {
-  border-color: rgba(0, 122, 255, 0.3);
-}
-.trace-search-icon {
-  font-size: 16px !important;
-  color: var(--text-muted);
-}
-.trace-search-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-size: 12px;
-  color: var(--text-primary);
-  outline: none;
-  min-width: 0;
-}
-.trace-search-input::placeholder {
-  color: var(--text-muted);
-}
-.trace-clear-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-.trace-clear-btn .material-symbols-outlined {
-  font-size: 14px !important;
-  color: var(--text-muted);
 }
 
 .log-viewer {

@@ -31,9 +31,6 @@ SOURCE_NAME = os.getenv("SOURCE_NAME", "")
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
 PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
 
-# 调用方传入的 trace ID（通过 client_payload 传递）
-TRACE_ID = os.getenv("TRACE_ID", "")
-
 SOURCE_URL = "https://www.zoomeye.ai/api/search?q=YXBwPSJ1ZHB4eSBtdWx0aWNhc3QgVURQLXRvLUhUVFAiICYmIGNvdW50cnk9IuS4reWbvSI%3D"
 
 
@@ -100,7 +97,6 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
         return
 
     payload = {
-        "traceId": TRACE_ID,
         "sourceType": SOURCE_TYPE,
         "sourceName": SOURCE_NAME,
         "hosts": hosts_list

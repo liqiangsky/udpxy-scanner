@@ -34,7 +34,7 @@ jobs:
         env:
           SOURCE_TYPE: ${{ github.event.client_payload.source_type }}
           SOURCE_NAME: ${{ github.event.client_payload.source_name }}
-          TRACE_ID: ${{ github.event.client_payload.trace_id }}
+
           PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
           PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
         run: |
