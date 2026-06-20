@@ -9,7 +9,7 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
   const progress = ref({
     running: false,
     currentId: null,
-    queuedIds: []
+    queuedIds: [],
   })
   let pollTimer = null
 
@@ -25,7 +25,7 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
     progress.value = {
       running: res.running,
       currentId: res.currentId,
-      queuedIds: res.queuedIds || []
+      queuedIds: res.queuedIds || [],
     }
 
     if (res.running) {
@@ -55,7 +55,13 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
   }
 
   return {
-    configs, loaded, progress,
-    fetch, loadProgress, startPolling, stopPolling, refresh
+    configs,
+    loaded,
+    progress,
+    fetch,
+    loadProgress,
+    startPolling,
+    stopPolling,
+    refresh,
   }
 })

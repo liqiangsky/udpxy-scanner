@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-
     <div class="page-header">
       <h1 class="page-title">数据源</h1>
       <button class="action-btn primary-btn" @click="startAddSub">
@@ -19,7 +18,12 @@
         </div>
       </div>
       <TransitionGroup v-else name="list-fade">
-        <div v-for="sub in subscriptions" :key="sub.id" class="config-card" :class="{ 'status-disabled': !sub.enabled }">
+        <div
+          v-for="sub in subscriptions"
+          :key="sub.id"
+          class="config-card"
+          :class="{ 'status-disabled': !sub.enabled }"
+        >
           <div class="card-top">
             <div class="config-identity">
               <h3 class="config-name">{{ sub.name }}</h3>
@@ -42,12 +46,18 @@
             </div>
             <div class="grid-item">
               <span class="lbl">上次拉取</span>
-              <span class="txt">{{ sub.lastFetchAt ? formatTime(sub.lastFetchAt) : '未拉取' }}</span>
+              <span class="txt">{{
+                sub.lastFetchAt ? formatTime(sub.lastFetchAt) : '未拉取'
+              }}</span>
             </div>
           </div>
 
           <div class="card-actions">
-            <button class="text-btn fetch-btn" @click="handleFetchSub(sub)" :class="{ fetching: fetchingMap[sub.id] }">
+            <button
+              class="text-btn fetch-btn"
+              @click="handleFetchSub(sub)"
+              :class="{ fetching: fetchingMap[sub.id] }"
+            >
               <span class="material-symbols-outlined icon-g-btn">cloud_download</span>
               {{ fetchingMap[sub.id] ? '拉取中' : '拉取' }}
             </button>
@@ -84,7 +94,11 @@
           </div>
           <div class="form-item">
             <label>订阅 URL</label>
-            <input v-model="formData.url" type="text" placeholder="https://example.com/api/hunt?key=xxx" />
+            <input
+              v-model="formData.url"
+              type="text"
+              placeholder="https://example.com/api/hunt?key=xxx"
+            />
           </div>
           <div class="form-item">
             <label>定时拉取 (Cron)，留空不执行</label>
@@ -94,12 +108,13 @@
             <button type="button" class="drawer-btn drawer-btn-primary" @click="handleSaveSub">
               {{ editingId ? '保存' : '添加' }}
             </button>
-            <button type="button" class="drawer-btn drawer-btn-cancel" @click="cancelForm">取消</button>
+            <button type="button" class="drawer-btn drawer-btn-cancel" @click="cancelForm">
+              取消
+            </button>
           </div>
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -120,7 +135,7 @@ const formatTime = (t) => {
   const d = new Date(t)
   if (isNaN(d)) return t
   const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 const loadSubscriptions = async () => {
@@ -195,10 +210,10 @@ const handleToggleEnabled = async (sub) => {
       uid: sub.uid,
       url: sub.url,
       enabled: !sub.enabled,
-      fetchCron: sub.fetchCron || ''
+      fetchCron: sub.fetchCron || '',
     })
     await loadSubscriptions()
-  } catch (e) {
+  } catch {
     toast.error('切换失败')
   }
 }
@@ -222,7 +237,10 @@ onMounted(loadSubscriptions)
 <style scoped>
 .page-header {
   position: fixed;
-  top: 0; left: 0; right: 0; z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   background: rgba(245, 245, 247, 0.92);
   backdrop-filter: blur(20px);
   padding: 12px 16px;
@@ -232,12 +250,27 @@ onMounted(loadSubscriptions)
   max-width: 100vw;
 }
 @media (min-width: 768px) {
-  .page-header { max-width: 720px; left: 50%; transform: translateX(-50%); }
+  .page-header {
+    max-width: 720px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
-@media (min-width: 1024px) { .page-header { max-width: 1100px; } }
-@media (min-width: 1440px) { .page-header { max-width: 1400px; } }
+@media (min-width: 1024px) {
+  .page-header {
+    max-width: 1100px;
+  }
+}
+@media (min-width: 1440px) {
+  .page-header {
+    max-width: 1400px;
+  }
+}
 
-.header-spacer { height: 48px; flex-shrink: 0; }
+.header-spacer {
+  height: 48px;
+  flex-shrink: 0;
+}
 
 /* ===== 列表 Grid ===== */
 .config-list {
@@ -248,9 +281,21 @@ onMounted(loadSubscriptions)
   max-width: var(--max-content);
   padding-bottom: 90px;
 }
-@media (min-width: 768px) { .config-list { max-width: 720px; } }
-@media (min-width: 1024px) { .config-list { max-width: 1100px; } }
-@media (min-width: 1440px) { .config-list { max-width: 1400px; } }
+@media (min-width: 768px) {
+  .config-list {
+    max-width: 720px;
+  }
+}
+@media (min-width: 1024px) {
+  .config-list {
+    max-width: 1100px;
+  }
+}
+@media (min-width: 1440px) {
+  .config-list {
+    max-width: 1400px;
+  }
+}
 
 /* ===== 卡片 ===== */
 .config-card {
@@ -306,7 +351,12 @@ onMounted(loadSubscriptions)
   flex-direction: column;
   gap: 10px;
 }
-.grid-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.grid-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .lbl {
   font-size: 11px;
   color: var(--text-muted);
@@ -339,25 +389,40 @@ onMounted(loadSubscriptions)
   height: 24px;
   flex-shrink: 0;
 }
-.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
 .slider {
-  position: absolute; cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: #e8e8ed;
   transition: 0.3s;
   border-radius: 24px;
 }
 .slider:before {
-  position: absolute; content: '';
-  height: 20px; width: 20px;
-  left: 2px; bottom: 2px;
+  position: absolute;
+  content: '';
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
   background: white;
   transition: 0.3s;
   border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
-input:checked + .slider { background: #34c759; }
-input:checked + .slider:before { transform: translateX(18px); }
+input:checked + .slider {
+  background: #34c759;
+}
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
 
 /* ===== 操作按钮 ===== */
 .card-actions {
@@ -369,19 +434,34 @@ input:checked + .slider:before { transform: translateX(18px); }
   border-top: 1px dashed var(--bg-neutral);
 }
 .text-btn {
-  background: none; border: none; outline: none;
-  font-size: 13px; font-weight: 600; cursor: pointer;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 3px;
   -webkit-tap-highlight-color: transparent;
   transition: all 0.2s ease;
 }
-.text-btn:active { transform: scale(0.94); }
-.text-btn.fetch-btn { color: var(--color-blue); }
-.text-btn.fetch-btn.fetching { opacity: 0.5; pointer-events: none; }
-.text-btn.edit { color: var(--color-blue); }
-.text-btn.delete { color: var(--color-red); }
+.text-btn:active {
+  transform: scale(0.94);
+}
+.text-btn.fetch-btn {
+  color: var(--color-blue);
+}
+.text-btn.fetch-btn.fetching {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.text-btn.edit {
+  color: var(--color-blue);
+}
+.text-btn.delete {
+  color: var(--color-red);
+}
 
 /* ===== 头部按钮 ===== */
 .action-btn {
@@ -402,7 +482,9 @@ input:checked + .slider:before { transform: translateX(18px); }
   padding: 8px 14px;
   border-radius: var(--radius-btn);
 }
-.icon-g-btn { font-size: 16px !important; }
+.icon-g-btn {
+  font-size: 16px !important;
+}
 
 /* ===== 骨架屏 ===== */
 .skeleton-list {
@@ -426,12 +508,23 @@ input:checked + .slider:before { transform: translateX(18px); }
   height: 14px;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
-.skeleton-title { width: 40%; }
-.skeleton-sub { width: 70%; }
-.skeleton-sub.narrow { width: 50%; }
+.skeleton-title {
+  width: 40%;
+}
+.skeleton-sub {
+  width: 70%;
+}
+.skeleton-sub.narrow {
+  width: 50%;
+}
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* ===== 空状态 ===== */
@@ -444,14 +537,22 @@ input:checked + .slider:before { transform: translateX(18px); }
 
 /* ===== Drawer ===== */
 .form-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(10px);
   z-index: 100;
-  display: flex; align-items: flex-end; justify-content: center;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
 .form-drawer {
-  background: var(--bg-card); width: 100%; max-width: 420px;
+  background: var(--bg-card);
+  width: 100%;
+  max-width: 420px;
   border-top-left-radius: var(--radius-card);
   border-top-right-radius: var(--radius-card);
   padding: 24px 24px calc(24px + env(safe-area-inset-bottom)) 24px;
@@ -459,41 +560,104 @@ input:checked + .slider:before { transform: translateX(18px); }
   animation: slide-up 0.35s var(--ease-spring);
 }
 .drawer-header {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
-.drawer-header h2 { font-size: 18px; font-weight: 700; color: var(--text-primary); }
-.close-x-btn {
-  background: var(--bg-neutral); border: none; width: 28px; height: 28px;
-  border-radius: 50%; font-size: 18px; color: var(--text-muted);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
+.drawer-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
-.drawer-form { display: flex; flex-direction: column; gap: 14px; }
+.close-x-btn {
+  background: var(--bg-neutral);
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drawer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .drawer-form input {
-  appearance: none; -webkit-appearance: none;
-  background: var(--bg-neutral); border: none; outline: none;
-  padding: 12px; border-radius: var(--radius-input); font-size: 14px;
-  font-weight: 500; color: var(--text-primary); width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-neutral);
+  border: none;
+  outline: none;
+  padding: 12px;
+  border-radius: var(--radius-input);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 100%;
   box-sizing: border-box;
 }
-.form-item { display: flex; flex-direction: column; gap: 6px; }
-.form-item label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-.drawer-actions { display: flex; gap: 10px; margin-top: 6px; }
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-item label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.drawer-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
 .drawer-btn {
-  flex: 1; padding: 12px; border: none; border-radius: var(--radius-input);
-  font-size: 14px; font-weight: 600; cursor: pointer;
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-input);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.2s ease;
 }
-.drawer-btn:active { transform: scale(0.97); }
-.drawer-btn-primary { background: var(--color-blue); color: #fff; }
-.drawer-btn-cancel { background: var(--bg-neutral); color: var(--text-secondary); }
+.drawer-btn:active {
+  transform: scale(0.97);
+}
+.drawer-btn-primary {
+  background: var(--color-blue);
+  color: #fff;
+}
+.drawer-btn-cancel {
+  background: var(--bg-neutral);
+  color: var(--text-secondary);
+}
 
 @keyframes slide-up {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 /* ===== Transition ===== */
-.list-fade-enter-active, .list-fade-leave-active { transition: all 0.3s ease; }
-.list-fade-enter-from, .list-fade-leave-to { opacity: 0; transform: translateY(-10px); }
+.list-fade-enter-active,
+.list-fade-leave-active {
+  transition: all 0.3s ease;
+}
+.list-fade-enter-from,
+.list-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
 </style>

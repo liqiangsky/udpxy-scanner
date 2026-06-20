@@ -4,13 +4,10 @@ import request from '@/api'
 
 export const useSettingsStore = defineStore('settings', () => {
   const data = ref(null)
-  const loaded = ref(false)
 
-  const fetch = async (force = false) => {
-    if (!force && loaded.value) return data.value
+  const fetch = async () => {
     const res = await request.get('/settings')
     data.value = res
-    loaded.value = true
     return res
   }
 
@@ -26,5 +23,5 @@ export const useSettingsStore = defineStore('settings', () => {
     return data.value
   }
 
-  return { data, loaded, fetch, update }
+  return { data, fetch, update }
 })

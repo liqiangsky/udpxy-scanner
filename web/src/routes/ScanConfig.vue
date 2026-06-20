@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-
     <div class="page-header">
       <h1 class="page-title">扫描配置</h1>
       <button class="action-btn primary-btn" @click="openForm()">
@@ -26,24 +25,59 @@
           :class="{
             'status-scanning': scanningId === config.id,
             'status-queued': queuedIds.includes(config.id),
-            'status-disabled': !config.enabled
+            'status-disabled': !config.enabled,
           }"
         >
           <div class="card-top">
             <div class="config-identity">
               <h3 class="config-name">{{ config.name }}</h3>
-              <span class="status-dot-badge" :class="scanningId === config.id ? 'scanning' : queuedIds.includes(config.id) ? 'queued' : config.enabled ? 'idle' : 'disabled'">
-                {{ scanningId === config.id ? '扫描中...' : queuedIds.includes(config.id) ? '排队中' : config.enabled ? '已停止' : '已禁用' }}
+              <span
+                class="status-dot-badge"
+                :class="
+                  scanningId === config.id
+                    ? 'scanning'
+                    : queuedIds.includes(config.id)
+                      ? 'queued'
+                      : config.enabled
+                        ? 'idle'
+                        : 'disabled'
+                "
+              >
+                {{
+                  scanningId === config.id
+                    ? '扫描中...'
+                    : queuedIds.includes(config.id)
+                      ? '排队中'
+                      : config.enabled
+                        ? '已停止'
+                        : '已禁用'
+                }}
               </span>
             </div>
 
             <button
               class="run-toggle-btn"
-              :class="scanningId === config.id ? 'scanning' : queuedIds.includes(config.id) ? 'queued' : 'idle'"
+              :class="
+                scanningId === config.id
+                  ? 'scanning'
+                  : queuedIds.includes(config.id)
+                    ? 'queued'
+                    : 'idle'
+              "
               @click="toggleScan(config)"
-              :title="scanningId === config.id ? '停止扫描' : queuedIds.includes(config.id) ? '从队列中移除' : '启动扫描'"
+              :title="
+                scanningId === config.id
+                  ? '停止扫描'
+                  : queuedIds.includes(config.id)
+                    ? '从队列中移除'
+                    : '启动扫描'
+              "
             >
-              <span v-if="activeIds.includes(config.id)" class="material-symbols-outlined icon-g-toggle">stop</span>
+              <span
+                v-if="activeIds.includes(config.id)"
+                class="material-symbols-outlined icon-g-toggle"
+                >stop</span
+              >
               <span v-else class="material-symbols-outlined icon-g-toggle">play_arrow</span>
             </button>
           </div>
@@ -67,21 +101,22 @@
             </div>
             <div class="grid-item full-width">
               <span class="lbl">地址</span>
-              <span class="txt font-mono color-gray truncate">{{ config.templateTargetAddress || '-' }}</span>
+              <span class="txt font-mono color-gray truncate">{{
+                config.templateTargetAddress || '-'
+              }}</span>
             </div>
           </div>
 
           <div class="card-actions" v-show="scanningId !== config.id">
-            <button class="text-btn toggle-enable" :class="{ disabled: !config.enabled }" @click="handleToggleEnable(config)">
+            <button
+              class="text-btn toggle-enable"
+              :class="{ disabled: !config.enabled }"
+              @click="handleToggleEnable(config)"
+            >
               {{ config.enabled ? '禁用' : '启用' }}
             </button>
             <button class="text-btn edit" @click="openForm(config)">编辑</button>
-            <button
-              class="text-btn delete"
-              @click="handleDelete(config.id)"
-            >
-              删除
-            </button>
+            <button class="text-btn delete" @click="handleDelete(config.id)">删除</button>
           </div>
         </div>
       </TransitionGroup>
@@ -107,8 +142,15 @@
           <div class="form-item">
             <label>数据源</label>
             <div class="source-selector">
-              <label class="source-tag all-tag" :class="{ active: formData.dataSources.length === 0 }">
-                <input type="checkbox" :checked="formData.dataSources.length === 0" @change="toggleAllSources" />
+              <label
+                class="source-tag all-tag"
+                :class="{ active: formData.dataSources.length === 0 }"
+              >
+                <input
+                  type="checkbox"
+                  :checked="formData.dataSources.length === 0"
+                  @change="toggleAllSources"
+                />
                 全部
               </label>
               <label
@@ -154,7 +196,12 @@
 
           <div class="form-item">
             <label>目标地址</label>
-            <input v-model="formData.targetAddress" type="text" placeholder="如：239.76.253.104:9000" required />
+            <input
+              v-model="formData.targetAddress"
+              type="text"
+              placeholder="如：239.76.253.104:9000"
+              required
+            />
           </div>
 
           <div class="form-buttons">
@@ -164,7 +211,6 @@
         </form>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -180,12 +226,8 @@ const scanConfigStore = useScanConfigStore()
 const configs = computed(() => scanConfigStore.configs)
 const progress = computed(() => scanConfigStore.progress)
 
-const scanningId = computed(() =>
-  progress.value.running ? progress.value.currentId : null
-)
-const queuedIds = computed(() =>
-  progress.value.running ? progress.value.queuedIds : []
-)
+const scanningId = computed(() => (progress.value.running ? progress.value.currentId : null))
+const queuedIds = computed(() => (progress.value.running ? progress.value.queuedIds : []))
 const activeIds = computed(() => {
   const ids = [...queuedIds.value]
   if (scanningId.value) ids.unshift(scanningId.value)
@@ -195,7 +237,7 @@ const activeIds = computed(() => {
 // 数据源标签
 const dataSourceLabel = (ds) => {
   if (!ds) return '全部'
-  const found = enabledDataSources.value.find(s => s.value === ds)
+  const found = enabledDataSources.value.find((s) => s.value === ds)
   return found ? found.label : ds
 }
 
@@ -227,7 +269,7 @@ const loadDataSources = async () => {
 const formState = reactive({
   visible: false,
   isEdit: false,
-  currentId: null
+  currentId: null,
 })
 
 const getDefaultFormData = () => ({
@@ -238,7 +280,7 @@ const getDefaultFormData = () => ({
   targetAddress: '',
   dataSources: [],
   dataSource: '',
-  enabled: true
+  enabled: true,
 })
 
 const formData = reactive(getDefaultFormData())
@@ -286,7 +328,7 @@ const openForm = (editTarget = null) => {
       targetAddress: editTarget.templateTargetAddress || '',
       dataSources: rawDs ? rawDs.split(',').filter(Boolean) : [],
       dataSource: rawDs,
-      enabled: editTarget.enabled
+      enabled: editTarget.enabled,
     })
   } else {
     formState.isEdit = false
@@ -301,11 +343,26 @@ const closeForm = () => {
 }
 
 const handleSubmit = async () => {
-  if (!formData.name?.trim()) { toast.error('配置名称不能为空'); return }
-  if (!formData.region) { toast.error('请选择地区'); return }
-  if (!formData.operator) { toast.error('请选择运营商'); return }
-  if (!formData.targetName?.trim()) { toast.error('请输入目标名称'); return }
-  if (!formData.targetAddress?.trim()) { toast.error('请输入目标地址'); return }
+  if (!formData.name?.trim()) {
+    toast.error('配置名称不能为空')
+    return
+  }
+  if (!formData.region) {
+    toast.error('请选择地区')
+    return
+  }
+  if (!formData.operator) {
+    toast.error('请选择运营商')
+    return
+  }
+  if (!formData.targetName?.trim()) {
+    toast.error('请输入目标名称')
+    return
+  }
+  if (!formData.targetAddress?.trim()) {
+    toast.error('请输入目标地址')
+    return
+  }
 
   const payload = {
     ...formData,
@@ -354,7 +411,7 @@ const handleToggleEnable = async (config) => {
       targetName: config.templateTargetName || '',
       targetAddress: config.templateTargetAddress || '',
       dataSource: config.dataSource || '',
-      enabled: newEnabled
+      enabled: newEnabled,
     })
     toast.success(newEnabled ? '已启用' : '已禁用')
     await scanConfigStore.refresh()
@@ -398,10 +455,14 @@ onUnmounted(() => {
   }
 }
 @media (min-width: 1024px) {
-  .page-header { max-width: 1100px; }
+  .page-header {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .page-header { max-width: 1400px; }
+  .page-header {
+    max-width: 1400px;
+  }
 }
 .header-spacer {
   height: 48px;
@@ -417,7 +478,7 @@ onUnmounted(() => {
 }
 .primary-btn {
   background: var(--color-blue);
-  color: #FFFFFF;
+  color: #ffffff;
   padding: 8px 14px;
   border-radius: var(--radius-btn);
   font-size: 13.5px;
@@ -427,11 +488,15 @@ onUnmounted(() => {
 }
 .primary-btn:active {
   transform: scale(0.96);
-  background: #0066D6;
+  background: #0066d6;
 }
 .icon-g-btn {
   font-size: 18px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 600, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 600,
+    'GRAD' 0,
+    'opsz' 24;
 }
 
 .config-list {
@@ -444,13 +509,19 @@ onUnmounted(() => {
 }
 
 @media (min-width: 768px) {
-  .config-list { max-width: 720px; }
+  .config-list {
+    max-width: 720px;
+  }
 }
 @media (min-width: 1024px) {
-  .config-list { max-width: 1100px; }
+  .config-list {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .config-list { max-width: 1400px; }
+  .config-list {
+    max-width: 1400px;
+  }
 }
 
 .config-card {
@@ -526,14 +597,25 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
 }
-.status-dot-badge.idle { color: var(--text-muted); background: var(--bg-neutral); }
-.status-dot-badge.idle::before { background: var(--text-muted); }
-.status-dot-badge.scanning { color: #fff; background: #34c759; }
+.status-dot-badge.idle {
+  color: var(--text-muted);
+  background: var(--bg-neutral);
+}
+.status-dot-badge.idle::before {
+  background: var(--text-muted);
+}
+.status-dot-badge.scanning {
+  color: #fff;
+  background: #34c759;
+}
 .status-dot-badge.scanning::before {
   background: #fff;
   animation: pulse 1.5s infinite;
 }
-.status-dot-badge.queued { color: #fff; background: #ff9500; }
+.status-dot-badge.queued {
+  color: #fff;
+  background: #ff9500;
+}
 .status-dot-badge.queued::before {
   background: #fff;
 }
@@ -549,10 +631,21 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s ease;
 }
-.run-toggle-btn.idle { background: var(--bg-status-good); color: var(--color-green); }
-.run-toggle-btn.scanning { background: var(--bg-status-error); color: var(--color-red); }
-.run-toggle-btn.queued { background: var(--bg-status-warn); color: var(--color-orange); }
-.run-toggle-btn:active { transform: scale(0.9); }
+.run-toggle-btn.idle {
+  background: var(--bg-status-good);
+  color: var(--color-green);
+}
+.run-toggle-btn.scanning {
+  background: var(--bg-status-error);
+  color: var(--color-red);
+}
+.run-toggle-btn.queued {
+  background: var(--bg-status-warn);
+  color: var(--color-orange);
+}
+.run-toggle-btn:active {
+  transform: scale(0.9);
+}
 
 .config-card.status-disabled {
   background: #f0f0f2;
@@ -577,15 +670,43 @@ onUnmounted(() => {
   grid-template-columns: 1fr 1fr;
   gap: 10px 12px;
 }
-.grid-item { display: flex; align-items: center; gap: 8px; }
-.grid-item.full-width { grid-column: span 2; }
-.lbl { font-size: 12px; color: var(--text-muted); flex-shrink: 0; width: 48px; }
-.txt { font-size: 13.5px; font-weight: 600; }
-.color-blue { color: var(--color-blue); }
-.color-dark { color: var(--text-primary); }
-.color-gray { color: #515154; font-weight: 500; }
-.font-mono { font-family: var(--font-mono); letter-spacing: -0.3px; }
-.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.grid-item.full-width {
+  grid-column: span 2;
+}
+.lbl {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 48px;
+}
+.txt {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.color-blue {
+  color: var(--color-blue);
+}
+.color-dark {
+  color: var(--text-primary);
+}
+.color-gray {
+  color: #515154;
+  font-weight: 500;
+}
+.font-mono {
+  font-family: var(--font-mono);
+  letter-spacing: -0.3px;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .card-actions {
   display: flex;
@@ -596,25 +717,46 @@ onUnmounted(() => {
   border-top: 1px dashed var(--bg-neutral);
 }
 .text-btn {
-  background: none; border: none; outline: none;
-  font-size: 13px; font-weight: 600; cursor: pointer;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.text-btn.edit { color: var(--color-blue); }
-.text-btn.delete { color: var(--color-red); }
-.text-btn.toggle-enable { color: var(--color-green); }
-.text-btn.toggle-enable.disabled { color: var(--color-orange); }
+.text-btn.edit {
+  color: var(--color-blue);
+}
+.text-btn.delete {
+  color: var(--color-red);
+}
+.text-btn.toggle-enable {
+  color: var(--color-green);
+}
+.text-btn.toggle-enable.disabled {
+  color: var(--color-orange);
+}
 
 .form-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(10px);
   z-index: 100;
-  display: flex; align-items: flex-end; justify-content: center;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
 .form-drawer {
-  background: var(--bg-card); width: 100%; max-width: 420px;
-  border-top-left-radius: var(--radius-card); border-top-right-radius: var(--radius-card);
+  background: var(--bg-card);
+  width: 100%;
+  max-width: 420px;
+  border-top-left-radius: var(--radius-card);
+  border-top-right-radius: var(--radius-card);
   padding: 24px 24px calc(24px + env(safe-area-inset-bottom)) 24px;
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
   animation: slide-up 0.35s var(--ease-spring);
@@ -625,28 +767,53 @@ onUnmounted(() => {
   gap: 12px;
 }
 .drawer-header {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
-.drawer-header h2 { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.drawer-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
 .close-x-btn {
-  background: var(--bg-neutral); border: none; width: 28px; height: 28px;
-  border-radius: 50%; font-size: 18px; color: var(--text-muted);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-neutral);
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.drawer-form input, .drawer-form select {
-  appearance: none; -webkit-appearance: none;
-  background: var(--bg-neutral); border: none; outline: none;
-  padding: 12px; border-radius: var(--radius-input); font-size: 14px;
-  font-weight: 500; color: var(--text-primary); width: 100%;
+.drawer-form input,
+.drawer-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-neutral);
+  border: none;
+  outline: none;
+  padding: 12px;
+  border-radius: var(--radius-input);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 100%;
   box-sizing: border-box;
 }
 .drawer-form select {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%238E8E93' d='M0 0h10L5 6z'/></svg>");
-  background-repeat: no-repeat; background-position: right 14px center;
+  background-repeat: no-repeat;
+  background-position: right 14px center;
 }
-.drawer-form input::placeholder { color: var(--text-disabled); }
+.drawer-form input::placeholder {
+  color: var(--text-disabled);
+}
 
 .source-selector {
   display: flex;
@@ -669,7 +836,9 @@ onUnmounted(() => {
   transition: all 0.15s ease;
   border: 1.5px solid transparent;
 }
-.source-tag input { display: none; }
+.source-tag input {
+  display: none;
+}
 .source-tag.active {
   background: rgba(0, 122, 255, 0.12);
   color: var(--color-blue);
@@ -687,12 +856,14 @@ onUnmounted(() => {
 }
 
 .form-buttons {
-  display: grid; grid-template-columns: 1fr 2fr; gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 12px;
   margin-top: 12px;
 }
 .primary-btn-submit {
   background: var(--color-blue);
-  color: #FFFFFF;
+  color: #ffffff;
   padding: 12px;
   border: none;
   border-radius: var(--radius-btn);
@@ -701,7 +872,10 @@ onUnmounted(() => {
   cursor: pointer;
   width: 100%;
 }
-.primary-btn-submit:active { transform: scale(0.98); background: #0066D6; }
+.primary-btn-submit:active {
+  transform: scale(0.98);
+  background: #0066d6;
+}
 
 .cancel-btn {
   background: var(--bg-neutral);
@@ -711,20 +885,39 @@ onUnmounted(() => {
   font-size: 15px;
   width: 100%;
 }
-.cancel-btn:active { background: #E8E8ED; }
+.cancel-btn:active {
+  background: #e8e8ed;
+}
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 @keyframes pulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.3); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 @keyframes slide-up {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 /* 骨架屏 */
@@ -745,18 +938,35 @@ onUnmounted(() => {
 .skeleton-line {
   height: 16px;
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--bg-neutral) 25%, #E8E8ED 50%, var(--bg-neutral) 75%);
+  background: linear-gradient(90deg, var(--bg-neutral) 25%, #e8e8ed 50%, var(--bg-neutral) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
-.skeleton-title { width: 60%; }
-.skeleton-sub { width: 40%; }
-.skeleton-sub.narrow { width: 25%; }
+.skeleton-title {
+  width: 60%;
+}
+.skeleton-sub {
+  width: 40%;
+}
+.skeleton-sub.narrow {
+  width: 25%;
+}
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
-.list-fade-enter-active, .list-fade-leave-active { transition: all 0.3s var(--ease-spring); }
-.list-fade-enter-from, .list-fade-leave-to { opacity: 0; transform: scale(0.93) translateY(12px); }
+.list-fade-enter-active,
+.list-fade-leave-active {
+  transition: all 0.3s var(--ease-spring);
+}
+.list-fade-enter-from,
+.list-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.93) translateY(12px);
+}
 </style>

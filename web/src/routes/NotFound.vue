@@ -8,8 +8,7 @@
   </div>
 </template>
 
-<script setup>
-</script>
+<script setup></script>
 
 <style scoped>
 .not-found {
@@ -52,6 +51,6 @@
 
 .back-btn:active {
   transform: scale(0.96);
-  background: #0066D6;
+  background: #0066d6;
 }
 </style>

@@ -9,7 +9,14 @@
       <form @submit.prevent="handleLogin">
         <div class="form-item">
           <label>密码</label>
-          <input v-model="form.password" type="password" placeholder="请输入密码" required autocomplete="current-password" />
+          <input
+            v-model="form.password"
+            type="password"
+            placeholder="请输入密码"
+            required
+            autofocus
+            autocomplete="current-password"
+          />
         </div>
 
         <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
@@ -154,7 +161,7 @@ const handleLogin = async () => {
 
 .login-btn:active {
   transform: scale(0.98);
-  background: #0066D6;
+  background: #0066d6;
 }
 
 .login-btn:disabled {

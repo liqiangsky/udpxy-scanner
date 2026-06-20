@@ -9,28 +9,30 @@
    ========================================================================== */
 :root {
   /* 字体 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-mono: 'Space Mono', "SF Mono", Menlo, Monaco, Consolas, monospace;
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'Space Mono', 'SF Mono', Menlo, Monaco, Consolas, monospace;
 
   /* 背景与文字 */
-  --bg-page: #F8F9FA;
-  --bg-card: #FFFFFF;
-  --bg-neutral: #F5F5F7;
-  --text-primary: #0F172A;
-  --text-secondary: #64748B;
-  --text-muted: #8E8E93;
-  --text-disabled: #C5C5C7;
+  --bg-page: #f8f9fa;
+  --bg-card: #ffffff;
+  --bg-neutral: #f5f5f7;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #8e8e93;
+  --text-disabled: #c5c5c7;
 
   /* 品牌功能色 */
-  --color-blue: #007AFF;
-  --color-green: #34C759;
-  --color-orange: #FF9500;
-  --color-red: #FF3B30;
+  --color-blue: #007aff;
+  --color-green: #34c759;
+  --color-orange: #ff9500;
+  --color-red: #ff3b30;
 
   /* 状态背景 */
-  --bg-status-good: #E8F7F0;
-  --bg-status-warn: #FFF3E6;
-  --bg-status-error: #FFEBEB;
+  --bg-status-good: #e8f7f0;
+  --bg-status-warn: #fff3e6;
+  --bg-status-error: #ffebeb;
 
   /* 圆角 */
   --radius-card: 24px;
@@ -67,17 +69,31 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-body, h1, h2, h3, h4, p, figure, blockquote, dl, dd {
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote,
+dl,
+dd {
   margin: 0;
 }
 
-ul, ol {
+ul,
+ol {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-img, svg, video, canvas, audio {
+img,
+svg,
+video,
+canvas,
+audio {
   display: block;
   max-width: 100%;
   height: auto;
@@ -96,7 +112,8 @@ textarea {
   display: none !important;
 }
 
-html, body {
+html,
+body {
   background-color: var(--bg-page);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -108,7 +125,10 @@ html, body {
 /* ==========================================================================
    3. 表单元素全局重置
    ========================================================================== */
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
@@ -248,7 +268,7 @@ button:disabled {
 }
 
 .input-base:focus {
-  background: #E8E8ED;
+  background: #e8e8ed;
 }
 
 .input-base::placeholder {
@@ -278,7 +298,7 @@ button:disabled {
 }
 
 .input-with-unit input:focus {
-  background: #E8E8ED;
+  background: #e8e8ed;
 }
 
 .input-with-unit input::placeholder {
@@ -292,7 +312,7 @@ button:disabled {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);
-  background: #E8E8ED;
+  background: #e8e8ed;
   padding: 2px 6px;
   border-radius: 6px;
   pointer-events: none;
@@ -320,7 +340,7 @@ button:disabled {
 }
 
 .input-with-icon input:focus {
-  background: #E8E8ED;
+  background: #e8e8ed;
 }
 
 .input-with-icon input::placeholder {
@@ -360,7 +380,7 @@ button:disabled {
 
 .btn-primary {
   background: var(--color-blue);
-  color: #FFFFFF;
+  color: #ffffff;
   padding: 8px 14px;
   border-radius: var(--radius-btn);
   font-size: 13.5px;
@@ -371,7 +391,7 @@ button:disabled {
 
 .btn-primary:active {
   transform: scale(0.96);
-  background: #0066D6;
+  background: #0066d6;
 }
 
 /* 底部 TabBar */
@@ -412,12 +432,20 @@ button:disabled {
 
 .tab-icon {
   font-size: 22px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
   transition: all 0.25s var(--ease-icon);
 }
 
 .tab-item.active .tab-icon {
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
   transform: scale(1.08);
 }
 

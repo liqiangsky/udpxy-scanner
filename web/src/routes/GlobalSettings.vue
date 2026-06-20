@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-
     <div class="page-header">
       <h1 class="page-title">全局设置</h1>
       <button class="save-btn" @click="handleSave">
@@ -12,7 +11,6 @@
     <div class="header-spacer"></div>
 
     <div class="settings-flow">
-
       <!-- 扫描引擎参数 -->
       <div class="settings-card">
         <div class="card-title-group">
@@ -24,12 +22,7 @@
           <div class="form-group">
             <label>并发验证数</label>
             <div class="input-with-unit">
-              <input
-                v-model.number="settings.engine.concurrency"
-                type="number"
-                min="1"
-                max="500"
-              />
+              <input v-model.number="settings.engine.concurrency" type="number" min="1" max="500" />
               <span class="unit-text">线程</span>
             </div>
           </div>
@@ -52,12 +45,7 @@
         <div class="form-group">
           <label>配置间延迟 (Delay)</label>
           <div class="input-with-unit">
-            <input
-              v-model.number="settings.engine.configDelay"
-              type="number"
-              min="0"
-              max="300"
-            />
+            <input v-model.number="settings.engine.configDelay" type="number" min="0" max="300" />
             <span class="unit-text">秒</span>
           </div>
           <p class="field-desc">上一个扫描配置结束后，队列进入下一个配置前的等待缓冲时间。</p>
@@ -79,7 +67,9 @@
             class="input-base"
             placeholder="留空表示不执行"
           />
-          <p class="field-desc">Cron 表达式：分 时 日 月 周。留空不执行。统一调度所有数据源扫描。</p>
+          <p class="field-desc">
+            Cron 表达式：分 时 日 月 周。留空不执行。统一调度所有数据源扫描。
+          </p>
         </div>
 
         <button
@@ -88,7 +78,9 @@
           :class="{ fetching: scanning }"
           @click="handleScan"
         >
-          <span class="material-symbols-outlined fetch-icon" :class="{ spin: scanning }">search</span>
+          <span class="material-symbols-outlined fetch-icon" :class="{ spin: scanning }"
+            >search</span
+          >
           <span>{{ scanning ? '扫描中...' : '手动扫描' }}</span>
         </button>
 
@@ -109,7 +101,9 @@
           @click="handleRecheck"
           :class="{ fetching: rechecking }"
         >
-          <span class="material-symbols-outlined fetch-icon" :class="{ spin: rechecking }">autorenew</span>
+          <span class="material-symbols-outlined fetch-icon" :class="{ spin: rechecking }"
+            >autorenew</span
+          >
           <span>{{ rechecking ? '复测中...' : '手动复测' }}</span>
         </button>
 
@@ -121,11 +115,26 @@
               <p><b>取值范围</b>：</p>
               <table>
                 <tbody>
-                  <tr><td>分</td><td>0-59</td></tr>
-                  <tr><td>时</td><td>0-23</td></tr>
-                  <tr><td>日</td><td>1-31</td></tr>
-                  <tr><td>月</td><td>1-12</td></tr>
-                  <tr><td>周</td><td>1-7（1=周一，7=周日）</td></tr>
+                  <tr>
+                    <td>分</td>
+                    <td>0-59</td>
+                  </tr>
+                  <tr>
+                    <td>时</td>
+                    <td>0-23</td>
+                  </tr>
+                  <tr>
+                    <td>日</td>
+                    <td>1-31</td>
+                  </tr>
+                  <tr>
+                    <td>月</td>
+                    <td>1-12</td>
+                  </tr>
+                  <tr>
+                    <td>周</td>
+                    <td>1-7（1=周一，7=周日）</td>
+                  </tr>
                 </tbody>
               </table>
               <p><b>常用符号</b>：</p>
@@ -163,13 +172,13 @@
             v-model="passwordForm.newPassword"
             type="password"
             class="input-base"
-            style="margin-top: 8px;"
+            style="margin-top: 8px"
             placeholder="新密码（至少 4 位）"
           />
           <button
             type="button"
             class="fetch-btn-mini"
-            style="margin-top: 8px;"
+            style="margin-top: 8px"
             :class="{ fetching: changingPassword }"
             @click="handleChangePassword"
           >
@@ -189,12 +198,11 @@
               placeholder="留空则不生成"
             />
           </div>
-          <p class="field-desc">外部服务调用 <code>/api/source/push</code> 时需携带 <code>X-API-Key</code> 头部。留空则禁用推送接口。</p>
-          <button
-            type="button"
-            class="fetch-btn-mini"
-            @click="generateApiKey"
-          >
+          <p class="field-desc">
+            外部服务调用 <code>/api/source/push</code> 时需携带
+            <code>X-API-Key</code> 头部。留空则禁用推送接口。
+          </p>
+          <button type="button" class="fetch-btn-mini" @click="generateApiKey">
             <span class="material-symbols-outlined fetch-icon">refresh</span>
             <span>生成随机 Key</span>
           </button>
@@ -210,7 +218,6 @@
         </div>
         <p class="field-desc">查看实时运行日志，支持按级别筛选</p>
       </div>
-
     </div>
   </div>
 </template>
@@ -227,12 +234,12 @@ const settingsStore = useSettingsStore()
 const settings = reactive({
   engine: { concurrency: 64, timeout: 2000, configDelay: 3 },
   scheduling: { scanCron: '', janitorCron: '' },
-  pushApiKey: ''
+  pushApiKey: '',
 })
 
 const passwordForm = reactive({
   oldPassword: '',
-  newPassword: ''
+  newPassword: '',
 })
 const changingPassword = ref(false)
 
@@ -258,12 +265,14 @@ const handleChangePassword = async () => {
   try {
     await request.post('/change-password', {
       oldPassword: passwordForm.oldPassword,
-      newPassword: passwordForm.newPassword
+      newPassword: passwordForm.newPassword,
     })
     toast.success('密码已修改，请重新登录')
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
-    setTimeout(() => { window.location.href = '/login' }, 1500)
+    setTimeout(() => {
+      window.location.href = '/login'
+    }, 1500)
   } catch (e) {
     toast.error(e?.response?.data?.detail || '修改失败')
   } finally {
@@ -273,7 +282,10 @@ const handleChangePassword = async () => {
 
 const generateApiKey = () => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  const key = Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const key = Array.from(
+    { length: 32 },
+    () => chars[Math.floor(Math.random() * chars.length)],
+  ).join('')
   settings.pushApiKey = key
   toast.success('已生成新 API Key，记得保存')
 }
@@ -315,7 +327,7 @@ const handleSave = async () => {
       configDelay: settings.engine.configDelay,
       scanCron: settings.scheduling.scanCron,
       janitorCron: settings.scheduling.janitorCron,
-      pushApiKey: settings.pushApiKey
+      pushApiKey: settings.pushApiKey,
     }
     await settingsStore.update(payload)
     toast.success('设置已保存')
@@ -356,10 +368,14 @@ onMounted(() => {
   }
 }
 @media (min-width: 1024px) {
-  .page-header { max-width: 1100px; }
+  .page-header {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .page-header { max-width: 1400px; }
+  .page-header {
+    max-width: 1400px;
+  }
 }
 .header-spacer {
   height: 48px;
@@ -375,13 +391,22 @@ onMounted(() => {
 }
 
 @media (min-width: 768px) {
-  .settings-flow { max-width: 720px; grid-template-columns: 1fr 1fr; }
+  .settings-flow {
+    max-width: 720px;
+    grid-template-columns: 1fr 1fr;
+  }
 }
 @media (min-width: 1024px) {
-  .settings-flow { max-width: 1100px; grid-template-columns: 1fr 1fr 1fr; }
+  .settings-flow {
+    max-width: 1100px;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
 }
 @media (min-width: 1440px) {
-  .settings-flow { max-width: 1400px; grid-template-columns: 1fr 1fr 1fr; }
+  .settings-flow {
+    max-width: 1400px;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
 }
 
 .settings-card {
@@ -405,7 +430,9 @@ onMounted(() => {
 .card-icon {
   font-size: 18px !important;
   color: var(--color-blue);
-  font-variation-settings: 'FILL' 0, 'wght' 500;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 500;
 }
 .card-title-group h2 {
   font-size: 15px;
@@ -430,7 +457,7 @@ onMounted(() => {
 
 .save-btn {
   background: var(--color-blue);
-  color: #FFFFFF;
+  color: #ffffff;
   border: none;
   padding: 6px 12px;
   border-radius: var(--radius-btn);
@@ -445,11 +472,15 @@ onMounted(() => {
 }
 .save-btn:active {
   transform: scale(0.96);
-  background: #0066D6;
+  background: #0066d6;
 }
 .save-btn-icon {
   font-size: 16px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 600, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 600,
+    'GRAD' 0,
+    'opsz' 24;
 }
 
 .fetch-btn-mini {
@@ -470,7 +501,7 @@ onMounted(() => {
 }
 .fetch-btn-mini:active {
   transform: scale(0.96);
-  background: #0066D6;
+  background: #0066d6;
 }
 .fetch-btn-mini.fetching {
   opacity: 0.6;
@@ -478,13 +509,19 @@ onMounted(() => {
 }
 .fetch-icon {
   font-size: 16px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
 }
 .spin {
   animation: spin 1s linear infinite;
 }
 
-.cron-help { margin-top: 4px; }
+.cron-help {
+  margin-top: 4px;
+}
 .cron-help summary {
   font-size: 12px;
   font-weight: 600;
@@ -502,9 +539,11 @@ onMounted(() => {
   background: var(--bg-neutral);
   border-radius: var(--radius-input);
 }
-.help-content p { margin: 4px 0; }
+.help-content p {
+  margin: 4px 0;
+}
 .help-content code {
-  background: #E8E8ED;
+  background: #e8e8ed;
   padding: 2px 6px;
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -517,13 +556,21 @@ onMounted(() => {
 }
 .help-content td {
   padding: 3px 8px;
-  border-bottom: 1px solid #E8E8ED;
+  border-bottom: 1px solid #e8e8ed;
 }
-.help-content td:first-child { font-weight: 600; color: var(--text-primary); }
+.help-content td:first-child {
+  font-weight: 600;
+  color: var(--text-primary);
+}
 
 /* 日志入口卡片 */
-.logs-entry-card { cursor: pointer; transition: all 0.2s ease; }
-.logs-entry-card:active { transform: scale(0.98); }
+.logs-entry-card {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.logs-entry-card:active {
+  transform: scale(0.98);
+}
 .entry-arrow {
   margin-left: auto;
   font-size: 22px !important;

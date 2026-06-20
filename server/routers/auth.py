@@ -85,17 +85,6 @@ def api_logout(data: LogoutRequest):
     return {"ok": True}
 
 
-@router.get("/auth")
-def api_check_auth(token: str = ""):
-    if not token or token not in _sessions:
-        return {"ok": False}
-    session = _sessions[token]
-    if int(time.time()) - session.get("created_at", 0) > SESSION_TTL:
-        del _sessions[token]
-        return {"ok": False}
-    return {"ok": True, "valid": True}
-
-
 class ChangePasswordRequest(BaseModel):
     oldPassword: str
     newPassword: str

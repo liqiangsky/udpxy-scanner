@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-
     <div class="page-header">
       <h1 class="page-title">组播源</h1>
       <div class="header-right">
@@ -8,18 +7,18 @@
           <span>{{ filteredList.length }}</span> 个可用
         </div>
         <div class="header-filters">
-        <div class="select-wrapper-inline">
-          <select v-model="filterForm.region" class="apple-select-sm">
-            <option value="">全部地区</option>
-            <option v-for="opt in regions" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-        </div>
-        <div class="select-wrapper-inline">
-          <select v-model="filterForm.operator" class="apple-select-sm">
-            <option value="">全部网络</option>
-            <option v-for="opt in operators" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-        </div>
+          <div class="select-wrapper-inline">
+            <select v-model="filterForm.region" class="apple-select-sm">
+              <option value="">全部地区</option>
+              <option v-for="opt in regions" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
+          <div class="select-wrapper-inline">
+            <select v-model="filterForm.operator" class="apple-select-sm">
+              <option value="">全部网络</option>
+              <option v-for="opt in operators" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -50,7 +49,10 @@
           </button>
         </div>
 
-        <div v-if="displayList.length === filteredList.length && displayList.length >= 50" class="all-loaded-hint">
+        <div
+          v-if="displayList.length === filteredList.length && displayList.length >= 50"
+          class="all-loaded-hint"
+        >
           已加载全部 {{ filteredList.length }} 条
         </div>
       </template>
@@ -59,7 +61,6 @@
         <p>暂无符合当前筛选条件的组播源</p>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -67,7 +68,7 @@
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import request from '@/api'
 import IptvHostCard from '@/components/HostCard.vue'
-import {regions, operators} from '@/data.js'
+import { regions, operators } from '@/data.js'
 import { toast } from '@/components/Toast'
 import { useAuthStore } from '@/stores/auth'
 
@@ -75,7 +76,7 @@ const authStore = useAuthStore()
 
 const filterForm = reactive({
   region: '',
-  operator: ''
+  operator: '',
 })
 
 const rawIptvList = ref([])
@@ -89,14 +90,9 @@ const displayCount = ref(PAGE_SIZE)
 const regionMap = reactive({})
 const operatorMap = reactive({})
 
-
-
-
-
 const loadPool = async () => {
   loading.value = true
   try {
-    authStore.init()
     const params = {}
     if (filterForm.region) {
       params.region = filterForm.region
@@ -107,10 +103,8 @@ const loadPool = async () => {
     const res = await request.get('/iptv-pool', { params })
     const flatList = []
 
-    res.groups.forEach(group => {
-
-      group.heads.forEach(item => {
-
+    res.groups.forEach((group) => {
+      group.heads.forEach((item) => {
         flatList.push({
           id: item.id,
 
@@ -155,7 +149,7 @@ const loadPool = async () => {
           // 来源
           //
           sourceType: item.sourceType,
-          sourceName: item.sourceName
+          sourceName: item.sourceName,
         })
 
         //
@@ -168,9 +162,7 @@ const loadPool = async () => {
         if (item.operator) {
           operatorMap[item.operator] = item.operator
         }
-
       })
-
     })
     rawIptvList.value = flatList
   } catch (e) {
@@ -180,14 +172,10 @@ const loadPool = async () => {
   }
 }
 const filteredList = computed(() => {
-  return rawIptvList.value.filter(item => {
-    const matchRegion =
-      !filterForm.region ||
-      item.region === filterForm.region
+  return rawIptvList.value.filter((item) => {
+    const matchRegion = !filterForm.region || item.region === filterForm.region
 
-    const matchOperator =
-      !filterForm.operator ||
-      item.operator === filterForm.operator
+    const matchOperator = !filterForm.operator || item.operator === filterForm.operator
 
     return matchRegion && matchOperator
   })
@@ -204,7 +192,9 @@ const loadMore = () => {
 // 筛选变化时重置分页
 watch(
   () => ({ region: filterForm.region, operator: filterForm.operator }),
-  () => { displayCount.value = PAGE_SIZE }
+  () => {
+    displayCount.value = PAGE_SIZE
+  },
 )
 
 const handleCopy = async (host) => {
@@ -248,7 +238,7 @@ const handleDelete = async (item) => {
     if (res.ok) {
       toast.success('删除成功')
       // 从列表中移除
-      rawIptvList.value = rawIptvList.value.filter(i => i.id !== item.id)
+      rawIptvList.value = rawIptvList.value.filter((i) => i.id !== item.id)
     } else {
       toast.error(res.error || '删除失败')
     }
@@ -261,7 +251,6 @@ onMounted(() => {
   loadPool()
 })
 </script>
-
 
 <style scoped>
 /* 页面顶部 */
@@ -353,7 +342,7 @@ onMounted(() => {
 }
 .apple-select-sm:active,
 .apple-select-sm:hover {
-  background-color: #E8E8ED;
+  background-color: #e8e8ed;
 }
 
 /* 筛选栏 */
@@ -407,15 +396,23 @@ onMounted(() => {
 .skeleton-line {
   height: 16px;
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--bg-neutral) 25%, #E8E8ED 50%, var(--bg-neutral) 75%);
+  background: linear-gradient(90deg, var(--bg-neutral) 25%, #e8e8ed 50%, var(--bg-neutral) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
-.skeleton-title { width: 60%; }
-.skeleton-sub { width: 40%; }
+.skeleton-title {
+  width: 60%;
+}
+.skeleton-sub {
+  width: 40%;
+}
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* 卡片动画 */
@@ -448,7 +445,7 @@ onMounted(() => {
 }
 .load-more-btn:active {
   transform: scale(0.96);
-  background: #E8E8ED;
+  background: #e8e8ed;
 }
 .all-loaded-hint {
   grid-column: 1 / -1;

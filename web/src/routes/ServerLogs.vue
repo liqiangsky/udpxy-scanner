@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-
     <div class="page-header">
       <button class="back-btn" @click="$router.back()">
         <span class="material-symbols-outlined">chevron_left</span>
@@ -22,7 +21,8 @@
             class="log-level-chip"
             :class="{ active: logLevel === lv }"
             @click="logLevel = lv"
-          >{{ lv === 'ALL' ? '全部' : lv }}</span>
+            >{{ lv === 'ALL' ? '全部' : lv }}</span
+          >
           <span class="log-count">{{ filteredLogs.length }} / {{ logs.length }} 条</span>
         </div>
 
@@ -31,16 +31,17 @@
             class="log-module-chip"
             :class="{ active: moduleFilter === '' }"
             @click="moduleFilter = ''"
-          >全部模块</span>
+            >全部模块</span
+          >
           <span
             v-for="m in modules"
             :key="m"
             class="log-module-chip"
             :class="{ active: moduleFilter === m }"
             @click="moduleFilter = m"
-          >{{ m }}</span>
+            >{{ m }}</span
+          >
         </div>
-
       </div>
 
       <div class="log-viewer" ref="logViewerRef">
@@ -56,13 +57,18 @@
           <span class="material-symbols-outlined log-empty-icon">search_off</span>
           <p>无匹配日志</p>
         </div>
-        <div v-else v-for="(line, i) in filteredLogs" :key="i" class="log-line" :class="getLogLevelClass(line)">
+        <div
+          v-else
+          v-for="(line, i) in filteredLogs"
+          :key="i"
+          class="log-line"
+          :class="getLogLevelClass(line)"
+        >
           <span class="log-time">{{ parseLogLine(line).time }}</span>
           <span class="log-text">{{ parseLogLine(line).display }}</span>
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -81,13 +87,15 @@ let pollTimer = null
 
 const parseLogLine = (line) => {
   // 格式: 2026-06-17 12:34:56 [LEVEL] [模块名] 内容
-  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[\w+\]\s+\[([^\]]+)\]\s+(.*)$/)
+  const match = line.match(
+    /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[\w+\]\s+\[([^\]]+)\]\s+(.*)$/,
+  )
   if (match) {
     return {
       time: match[1],
       module: match[2],
       content: match[3],
-      display: `[${match[2]}] ${match[3]}`
+      display: `[${match[2]}] ${match[3]}`,
     }
   }
   // 回退：只解析时间
@@ -110,7 +118,7 @@ const filteredLogs = computed(() => {
 
   // 模块过滤
   if (moduleFilter.value) {
-    result = result.filter(line => {
+    result = result.filter((line) => {
       const parsed = parseLogLine(line)
       return parsed.module === moduleFilter.value
     })
@@ -163,7 +171,8 @@ const refreshLogs = async () => {
 }
 
 const getLogLevelClass = (line) => {
-  if (line.includes('[ERROR]') || line.includes('[EXCEPTION]') || line.includes('[CRITICAL]')) return 'log-error'
+  if (line.includes('[ERROR]') || line.includes('[EXCEPTION]') || line.includes('[CRITICAL]'))
+    return 'log-error'
   if (line.includes('[WARNING]')) return 'log-warning'
   return ''
 }
@@ -201,13 +210,21 @@ onUnmounted(() => {
 }
 
 @media (min-width: 768px) {
-  .page-header { max-width: 720px; margin-left: auto; margin-right: auto; }
+  .page-header {
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 @media (min-width: 1024px) {
-  .page-header { max-width: 1100px; }
+  .page-header {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .page-header { max-width: 1400px; }
+  .page-header {
+    max-width: 1400px;
+  }
 }
 .page-title {
   flex: 1;
@@ -230,7 +247,9 @@ onUnmounted(() => {
   font-size: 20px !important;
   color: var(--text-primary);
 }
-.back-btn:active { transform: scale(0.9); }
+.back-btn:active {
+  transform: scale(0.9);
+}
 .header-spacer {
   height: 56px;
   flex-shrink: 0;
@@ -252,7 +271,9 @@ onUnmounted(() => {
   font-size: 20px !important;
   color: var(--text-muted);
 }
-.refresh-btn:active { transform: scale(0.9); }
+.refresh-btn:active {
+  transform: scale(0.9);
+}
 
 .log-page {
   width: 100%;
@@ -261,13 +282,19 @@ onUnmounted(() => {
 }
 
 @media (min-width: 768px) {
-  .log-page { max-width: 720px; }
+  .log-page {
+    max-width: 720px;
+  }
 }
 @media (min-width: 1024px) {
-  .log-page { max-width: 1100px; }
+  .log-page {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .log-page { max-width: 1400px; }
+  .log-page {
+    max-width: 1400px;
+  }
 }
 
 .log-filters {
@@ -344,23 +371,43 @@ onUnmounted(() => {
 }
 
 @media (min-width: 768px) {
-  .log-viewer { margin: 0; }
+  .log-viewer {
+    margin: 0;
+  }
 }
-.log-viewer::-webkit-scrollbar { width: 4px; }
-.log-viewer::-webkit-scrollbar-track { background: transparent; }
-.log-viewer::-webkit-scrollbar-thumb { background: #555; border-radius: 2px; }
+.log-viewer::-webkit-scrollbar {
+  width: 4px;
+}
+.log-viewer::-webkit-scrollbar-track {
+  background: transparent;
+}
+.log-viewer::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 2px;
+}
 
-.log-line { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-.log-line:last-child { border-bottom: none; }
+.log-line {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.log-line:last-child {
+  border-bottom: none;
+}
 .log-time {
   display: block;
   font-size: 10px;
   color: #666;
   margin-bottom: 2px;
 }
-.log-text { white-space: pre-wrap; }
-.log-error .log-text { color: #f48771; }
-.log-warning .log-text { color: #dcdcaa; }
+.log-text {
+  white-space: pre-wrap;
+}
+.log-error .log-text {
+  color: #f48771;
+}
+.log-warning .log-text {
+  color: #dcdcaa;
+}
 
 .log-empty {
   display: flex;
@@ -381,8 +428,14 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
-.spin { animation: spin 1s linear infinite; }
+.spin {
+  animation: spin 1s linear infinite;
+}
 </style>

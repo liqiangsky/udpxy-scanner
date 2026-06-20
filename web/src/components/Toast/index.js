@@ -11,8 +11,16 @@ render(vnode, div)
 
 // 向外暴露符合开发者直觉的全局快捷对象
 export const toast = {
-  info(msg, duration) { vnode.component.exposed.add(msg, 'info', duration) },
-  success(msg, duration) { vnode.component.exposed.add(msg, 'success', duration) },
-  warning(msg, duration) { vnode.component.exposed.add(msg, 'warning', duration) },
-  error(msg, duration) { vnode.component.exposed.add(msg, 'error', duration) }
+  info(msg, duration) {
+    vnode.component.exposed.add(msg, 'info', duration)
+  },
+  success(msg, duration) {
+    vnode.component.exposed.add(msg, 'success', duration)
+  },
+  warning(msg, duration) {
+    vnode.component.exposed.add(msg, 'warning', duration)
+  },
+  error(msg, duration) {
+    vnode.component.exposed.add(msg, 'error', duration)
+  },
 }

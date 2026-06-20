@@ -1,12 +1,7 @@
 <template>
   <div class="sc-toast-container">
     <TransitionGroup name="toast-slide" tag="div" class="sc-toast-group">
-      <div
-        v-for="item in items"
-        :key="item.id"
-        class="sc-toast-item"
-        :class="`type-${item.type}`"
-      >
+      <div v-for="item in items" :key="item.id" class="sc-toast-item" :class="`type-${item.type}`">
         <span class="sc-toast-icon material-symbols-outlined">{{ icons[item.type] }}</span>
         <div class="sc-toast-content">{{ item.message }}</div>
         <button class="sc-toast-close" @click="remove(item.id)">
@@ -29,7 +24,7 @@ const icons = {
   success: 'check_circle',
   error: 'error',
   info: 'info',
-  warning: 'warning'
+  warning: 'warning',
 }
 
 const add = (message, type = 'info', duration = 3500) => {
@@ -42,7 +37,7 @@ const add = (message, type = 'info', duration = 3500) => {
 }
 
 const remove = (id) => {
-  items.value = items.value.filter(item => item.id !== id)
+  items.value = items.value.filter((item) => item.id !== id)
 }
 
 defineExpose({ add })
@@ -73,7 +68,9 @@ defineExpose({ add })
   align-items: center;
   padding: 12px 14px;
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.06);
   backdrop-filter: blur(20px);
   pointer-events: auto;
   box-sizing: border-box;
@@ -123,29 +120,45 @@ defineExpose({ add })
   background-color: rgba(16, 30, 24, 0.88);
   color: #e8f7f0;
 }
-.type-success .sc-toast-icon { color: var(--color-green); }
-.type-success .sc-toast-close { color: rgba(255, 255, 255, 0.4); }
+.type-success .sc-toast-icon {
+  color: var(--color-green);
+}
+.type-success .sc-toast-close {
+  color: rgba(255, 255, 255, 0.4);
+}
 
 .type-error {
   background-color: rgba(30, 12, 18, 0.88);
   color: #ffe8eb;
 }
-.type-error .sc-toast-icon { color: var(--color-red); }
-.type-error .sc-toast-close { color: rgba(255, 255, 255, 0.4); }
+.type-error .sc-toast-icon {
+  color: var(--color-red);
+}
+.type-error .sc-toast-close {
+  color: rgba(255, 255, 255, 0.4);
+}
 
 .type-info {
   background-color: rgba(12, 20, 36, 0.88);
   color: #e8f0ff;
 }
-.type-info .sc-toast-icon { color: var(--color-blue); }
-.type-info .sc-toast-close { color: rgba(255, 255, 255, 0.4); }
+.type-info .sc-toast-icon {
+  color: var(--color-blue);
+}
+.type-info .sc-toast-close {
+  color: rgba(255, 255, 255, 0.4);
+}
 
 .type-warning {
   background-color: rgba(30, 22, 8, 0.88);
   color: #fff3e0;
 }
-.type-warning .sc-toast-icon { color: var(--color-orange); }
-.type-warning .sc-toast-close { color: rgba(255, 255, 255, 0.4); }
+.type-warning .sc-toast-icon {
+  color: var(--color-orange);
+}
+.type-warning .sc-toast-close {
+  color: rgba(255, 255, 255, 0.4);
+}
 
 /* 动画：底部上浮 + 淡入淡出 */
 .toast-slide-enter-from {

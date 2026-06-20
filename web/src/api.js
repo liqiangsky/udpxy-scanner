@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const request = axios.create({
   baseURL: API_BASE,
-  timeout: 15000
+  timeout: 15000,
 })
 
 request.interceptors.request.use((config) => {
@@ -34,7 +34,7 @@ request.interceptors.response.use(
     toast.error(msg)
     console.error('API 请求失败:', error)
     return Promise.reject(error)
-  }
+  },
 )
 
 export default request
