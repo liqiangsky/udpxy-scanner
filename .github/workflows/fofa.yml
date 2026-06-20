@@ -1,0 +1,40 @@
+name: FOFA Push Task
+
+on:
+  # 1. 允许通过 CF Worker 远程触发
+  repository_dispatch:
+    types: [trigger_fofa]
+
+  # 2. 也保留定时触发（可选）
+  # schedule:
+  #   - cron: '0 8 * * *'  # 每天早8点
+
+  # 3. 手动点击触发
+  workflow_dispatch:
+
+jobs:
+  run_fofa:
+    runs-on: ubuntu-latest
+    environment: "env"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install deps
+        run: |
+          pip install playwright aiohttp
+          playwright install chromium
+
+      - name: Run FOFA Scraper
+        env:
+          SOURCE_TYPE: ${{ github.event.client_payload.source_type }}
+          SOURCE_NAME: ${{ github.event.client_payload.source_name }}
+          PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
+          PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
+        run: |
+          python .github/scripts/fofa.py
