@@ -36,17 +36,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const router = useRouter()
-
-onMounted(() => {
-  authStore.init()
-})
 
 const showTabbar = computed(() => {
   return authStore.isLoggedIn && !route.meta?.hideNavbar
