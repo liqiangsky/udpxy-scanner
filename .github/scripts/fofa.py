@@ -31,6 +31,7 @@ FOFA_QBASE64 = os.getenv(
     "FOFA_QBASE64",
     # country="CN" && udpxy && Content-Type: application/octet-stream
     "Y291bnRyeT0iQ04iICYmIHVkcHh5ICYmIENvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFt"
+    # country="CN" && udpxy && Content-Type: application/octet-stream && region="Hubei"
 )
 FOFA_URL = f"https://fofa.so/result?qbase64={FOFA_QBASE64}"
 

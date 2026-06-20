@@ -25,7 +25,7 @@ logger = logging.getLogger("zoomeye_scanner")
 
 # 数据来源
 SOURCE_TYPE = "zoomeye"
-SOURCE_NAME = "ZoomEye"
+SOURCE_NAME = "钟馗之眼"
 
 # 💡 你的后端推送回调配置
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
@@ -35,6 +35,7 @@ PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
 # SOURCE_URL = "https://www.zoomeye.ai/api/search?q=YXBwPSJ1ZHB4eSBtdWx0aWNhc3QgVURQLXRvLUhUVFAiICYmIGNvdW50cnk9IuS4reWbvSI%3D"
 # "udpxy" && country="China" && "Content-Type: application/octet-stream"
 SOURCE_URL = "https://www.zoomeye.ai/api/search?q=InVkcHh5IiAmJiBjb3VudHJ5PSJDaGluYSIgJiYgIkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtIg%3D%3D"
+# "udpxy" && country="China" && "Content-Type: application/octet-stream" && subdivisions="Hainan"
 
 
 async def fetch_via_playwright(api_url: str) -> dict:
