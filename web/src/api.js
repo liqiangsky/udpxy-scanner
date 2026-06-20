@@ -27,7 +27,9 @@ request.interceptors.response.use(
       toast.error('登录已过期，请重新登录')
       const currentPath = window.location.pathname
       const redirect = currentPath !== '/login' ? currentPath : ''
-      window.location.href = redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'
+      setTimeout(() => {
+        window.location.href = redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'
+      }, 1500)
       return Promise.reject(error)
     }
     const msg = error.response?.data?.detail || error.message || '请求失败'
