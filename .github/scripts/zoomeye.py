@@ -31,7 +31,10 @@ SOURCE_NAME = "ZoomEye"
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
 PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
 
-SOURCE_URL = "https://www.zoomeye.ai/api/search?q=YXBwPSJ1ZHB4eSBtdWx0aWNhc3QgVURQLXRvLUhUVFAiICYmIGNvdW50cnk9IuS4reWbvSI%3D"
+# app="udpxy multicast UDP-to-HTTP" && country="中国"
+# SOURCE_URL = "https://www.zoomeye.ai/api/search?q=YXBwPSJ1ZHB4eSBtdWx0aWNhc3QgVURQLXRvLUhUVFAiICYmIGNvdW50cnk9IuS4reWbvSI%3D"
+# "udpxy" && country="China" && "Content-Type: application/octet-stream"
+SOURCE_URL = "https://www.zoomeye.ai/api/search?q=InVkcHh5IiAmJiBjb3VudHJ5PSJDaGluYSIgJiYgIkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtIg%3D%3D"
 
 
 async def fetch_via_playwright(api_url: str) -> dict:
