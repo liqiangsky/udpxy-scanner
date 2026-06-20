@@ -67,7 +67,7 @@ def extract_hosts_from_text(text: str) -> set:
     return hosts
 
 
-def extract_hosts_from_page(page) -> set:
+async def extract_hosts_from_page(page) -> set:
     """通过多种方式从当前页面提取 HOST"""
     # 方案 1: 直接通过 JS 获取所有可见文本，正则匹配 IP:Port
     try:
