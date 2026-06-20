@@ -32,9 +32,6 @@ jobs:
 
       - name: Run Python Script
         env:
-          SOURCE_TYPE: ${{ github.event.client_payload.source_type }}
-          SOURCE_NAME: ${{ github.event.client_payload.source_name }}
-
           PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
           PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
         run: |

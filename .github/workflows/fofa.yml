@@ -32,8 +32,7 @@ jobs:
 
       - name: Run FOFA Scraper
         env:
-          SOURCE_TYPE: ${{ github.event.client_payload.source_type }}
-          SOURCE_NAME: ${{ github.event.client_payload.source_name }}
+          FOFA_QBASE64: ${{ github.event.client_payload.qbase64 }}
           PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
           PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
         run: |

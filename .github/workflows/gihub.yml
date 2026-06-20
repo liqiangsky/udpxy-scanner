@@ -32,9 +32,6 @@ jobs:
       - name: Run Python Script
         env:
           PREFETCH_QUERIES: ${{ toJSON(github.event.client_payload.prefetch_queries) }}
-          SOURCE_TYPE: ${{ github.event.client_payload.source_type }}
-          SOURCE_NAME: ${{ github.event.client_payload.source_name }}
-
           MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
           PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
           PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}

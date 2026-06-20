@@ -19,14 +19,20 @@ logging.basicConfig(
 logger = logging.getLogger("fofa_scanner")
 
 # ── 环境变量 ──────────────────────────────────────────────
-SOURCE_TYPE = os.getenv("SOURCE_TYPE", "fofa")
-SOURCE_NAME = os.getenv("SOURCE_NAME", "FOFA")
-
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
 PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
 
-# FOFA 搜索 URL
-FOFA_URL = "https://fofa.so/result?qbase64=Y291bnRyeT0iQ04iICYmIHVkcHh5ICYmIENvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFt"
+# 数据来源
+SOURCE_TYPE = "fofa"
+SOURCE_NAME = "FOFA"
+
+# FOFA 搜索 qbase64（可通过环境变量覆盖，默认搜索 udpxy）
+FOFA_QBASE64 = os.getenv(
+    "FOFA_QBASE64",
+    # country="CN" && udpxy && Content-Type: application/octet-stream
+    "Y291bnRyeT0iQ04iICYmIHVkcHh5ICYmIENvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFt"
+)
+FOFA_URL = f"https://fofa.so/result?qbase64={FOFA_QBASE64}"
 
 # ── 常量 ──────────────────────────────────────────────────
 # 匹配 IP:PORT 或 域名:PORT

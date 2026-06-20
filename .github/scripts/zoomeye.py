@@ -23,9 +23,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("zoomeye_scanner")
 
-# 2. 从 GitHub Action 环境变量中获取动态参数
-SOURCE_TYPE = os.getenv("SOURCE_TYPE", "")
-SOURCE_NAME = os.getenv("SOURCE_NAME", "")
+# 数据来源
+SOURCE_TYPE = "zoomeye"
+SOURCE_NAME = "ZoomEye"
 
 # 💡 你的后端推送回调配置
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
