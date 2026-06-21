@@ -118,15 +118,21 @@ async def api_fetch_all_subscriptions():
             "SELECT * FROM api_subscriptions WHERE enabled=1"
         ).fetchall()
 
-    results = []
-    for row in rows:
+    async def _fetch_one(row):
         logger.info(f"📡 开始拉取订阅 {row['name']}")
-        sources = await fetch_subscription(row["name"], row["uid"], row["url"])
-        fetched = 0
-        if sources:
-            hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-            fetched = await process_source_data(row["uid"], hosts_data)
-        results.append({"uid": row["uid"], "name": row["name"], "fetched": fetched})
+        try:
+            sources = await fetch_subscription(row["name"], row["uid"], row["url"])
+            fetched = 0
+            if sources:
+                hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
+                fetched = await process_source_data(row["uid"], hosts_data)
+            return {"uid": row["uid"], "name": row["name"], "fetched": fetched}
+        except Exception as e:
+            logger.error(f"❌ 拉取订阅 {row['name']} 失败: {e}")
+            return {"uid": row["uid"], "name": row["name"], "fetched": 0, "error": str(e)}
+
+    results = await asyncio.gather(*(_fetch_one(dict(r)) for r in rows))
+    results = list(results)
 
     from datetime import datetime
     now = datetime.now().isoformat()

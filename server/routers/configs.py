@@ -140,16 +140,24 @@ def api_get_progress():
 
 
 @router.get("/source-cache/list")
-def api_source_cache_list(sourceType: str = Query(None)):
+def api_source_cache_list(sourceType: str = Query(None), page: int = Query(1, ge=1), page_size: int = Query(500, ge=1, le=2000)):
+    offset = (page - 1) * page_size
     with get_cache_db() as conn:
         if sourceType:
+            total = conn.execute("SELECT COUNT(*) AS cnt FROM source_cache WHERE sourceType=?", (sourceType,)).fetchone()["cnt"]
             rows = conn.execute(
-                "SELECT * FROM source_cache WHERE sourceType=? ORDER BY id",
-                (sourceType,)
+                "SELECT * FROM source_cache WHERE sourceType=? ORDER BY id LIMIT ? OFFSET ?",
+                (sourceType, page_size, offset)
             ).fetchall()
-            return [dict(r) for r in rows]
-        rows = conn.execute("SELECT * FROM source_cache ORDER BY sourceType, id").fetchall()
-    return [dict(r) for r in rows]
+        else:
+            total = conn.execute("SELECT COUNT(*) AS cnt FROM source_cache").fetchone()["cnt"]
+            rows = conn.execute("SELECT * FROM source_cache ORDER BY sourceType, id LIMIT ? OFFSET ?", (page_size, offset)).fetchall()
+    return {
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "data": [dict(r) for r in rows]
+    }
 
 
 @router.post("/source-cache/delete")
@@ -202,7 +210,8 @@ async def api_source_push(request: Request):
 
     logger.info(f"📥 收到 {len(hosts)} 个资产 ({source_type})")
 
-    asyncio.create_task(process_source_data(source_type, hosts))
+    task = asyncio.create_task(process_source_data(source_type, hosts))
+    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
     return {
         "ok": True,

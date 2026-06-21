@@ -7,6 +7,8 @@ import ipaddress
 import ip2region.searcher as xdb_searcher
 import ip2region.util as xdb_util
 
+from db.database import run_in_thread
+
 logger = logging.getLogger("GeoIP")
 
 _XDB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "ip2region_v4.xdb")
@@ -146,11 +148,17 @@ async def _health_check_batch(session: aiohttp.ClientSession, hosts: list[dict],
     return valid
 
 
-async def enrich_geo_batch(sources: list[dict]) -> list[dict]:
+async def enrich_geo_batch(sources: list[dict], session: aiohttp.ClientSession = None) -> list[dict]:
     from services.source_cache import get_cached_geo_batch
 
-    async with aiohttp.ClientSession() as session:
+    own_session = session is None
+    if own_session:
+        session = aiohttp.ClientSession()
+    try:
         sources = await _health_check_batch(session, sources)
+    finally:
+        if own_session:
+            await session.close()
     if not sources:
         return []
 
@@ -202,7 +210,7 @@ async def enrich_geo_batch(sources: list[dict]) -> list[dict]:
                 ip = host_to_ip.get(host)
                 if not ip:
                     continue
-                geo = _query_ip2region(ip)
+                geo = await run_in_thread(_query_ip2region, ip)
                 if geo.get("is_foreign"):
                     foreign_count += 1
                     continue

@@ -60,33 +60,39 @@ def get_cached_hosts(source_type: str, region: str = "") -> List[str]:
         return [r["host"] for r in rows]
 
 
-def get_cached_geo_batch(hosts: List[str]) -> dict:
+def get_cached_geo_batch(hosts: List[str], chunk_size: int = 500) -> dict:
     if not hosts:
         return {}
+    result = {}
     with get_cache_db() as conn:
-        placeholders = ",".join("?" for _ in hosts)
-        rows = conn.execute(
-            f"SELECT host, geoRegion, geoOperator FROM source_cache WHERE host IN ({placeholders})",
-            hosts
-        ).fetchall()
-        result = {}
-        for row in rows:
-            if row["geoRegion"] or row["geoOperator"]:
-                result[row["host"]] = {"geoRegion": row["geoRegion"], "geoOperator": row["geoOperator"]}
-        return result
+        for i in range(0, len(hosts), chunk_size):
+            chunk = hosts[i:i + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = conn.execute(
+                f"SELECT host, geoRegion, geoOperator FROM source_cache WHERE host IN ({placeholders})",
+                chunk
+            ).fetchall()
+            for row in rows:
+                if row["geoRegion"] or row["geoOperator"]:
+                    result[row["host"]] = {"geoRegion": row["geoRegion"], "geoOperator": row["geoOperator"]}
+    return result
 
 
-def get_existing_iptv_hosts_batch(hosts: List[str]) -> set:
+def get_existing_iptv_hosts_batch(hosts: List[str], chunk_size: int = 500) -> set:
     if not hosts:
         return set()
     from db.database import get_iptv_db
+    result = set()
     with get_iptv_db() as conn:
-        placeholders = ",".join("?" for _ in hosts)
-        rows = conn.execute(
-            f"SELECT DISTINCT host FROM iptv_list WHERE host IN ({placeholders})",
-            hosts
-        ).fetchall()
-        return {row["host"] for row in rows}
+        for i in range(0, len(hosts), chunk_size):
+            chunk = hosts[i:i + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = conn.execute(
+                f"SELECT DISTINCT host FROM iptv_list WHERE host IN ({placeholders})",
+                chunk
+            ).fetchall()
+            result.update(row["host"] for row in rows)
+    return result
 
 
 def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: str):
@@ -94,6 +100,16 @@ def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: s
         conn.execute(
             "INSERT OR IGNORE INTO source_cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
             (source_type, host, geo_region, geo_operator)
+        )
+
+
+def cache_host_geo_batch(rows: list):
+    if not rows:
+        return
+    with get_cache_db() as conn:
+        conn.executemany(
+            "INSERT OR IGNORE INTO source_cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
+            rows
         )
 
 

@@ -8,7 +8,7 @@ from typing import List
 
 from db.database import get_db, get_cache_db, get_iptv_db, get_setting, run_in_thread
 from core.status import task_runner
-from services.source_cache import get_cached_hosts, cache_sources, cache_host_geo, get_cached_geo_batch, get_existing_iptv_hosts_batch
+from services.source_cache import get_cached_hosts, cache_sources, cache_host_geo_batch, get_cached_geo_batch, get_existing_iptv_hosts_batch
 from services.validator import verify_single_host
 from services.geoip import enrich_geo_batch
 
@@ -31,12 +31,6 @@ def _update_config_timestamp(cfg_id: int):
 def _fetch_enabled_subscriptions():
     with get_db() as conn:
         return [dict(r) for r in conn.execute("SELECT uid, name FROM api_subscriptions WHERE enabled=1").fetchall()]
-
-
-def _check_subscription_enabled(ds_uid: str):
-    with get_db() as conn:
-        row = conn.execute("SELECT uid, name FROM api_subscriptions WHERE uid=? AND enabled=1", (ds_uid,)).fetchone()
-        return dict(row) if row else None
 
 
 def _batch_insert_iptv(batch_rows: list, now_stamp: int):
@@ -137,14 +131,15 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                     subs = await run_in_thread(_fetch_enabled_subscriptions)
                     data_sources = [s["uid"] for s in subs]
 
-                candidate_hosts = []  # list of (host, source_type, source_name)
+                all_subs = await run_in_thread(_fetch_enabled_subscriptions)
+                subs_map = {s["uid"]: s["name"] for s in all_subs}
+
+                candidate_hosts = []
                 for ds_uid in data_sources:
-                    source_name = ds_uid
-                    sub_row = await run_in_thread(_check_subscription_enabled, ds_uid)
-                    if not sub_row:
+                    source_name = subs_map.get(ds_uid)
+                    if not source_name:
                         logger.warning(f"⚠️ [数据源跳过] uid='{ds_uid}' 不存在或未启用")
                         continue
-                    source_name = sub_row["name"]
                     region = config.get("templateRegion", "")
                     hosts = get_cached_hosts(ds_uid, region)
                     logger.info(f"📡 [{source_name}] 从 source_cache 读取, region='{region}', 匹配到 {len(hosts)} 个 host: {hosts}")
@@ -224,14 +219,17 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                 host_item.update(cached)
 
                         # 统一 geoip 富化（已有 geo 的会自动跳过）
-                        enriched = await enrich_geo_batch(_valid_hosts)
+                        enriched = await enrich_geo_batch(_valid_hosts, session)
 
                         # 新 geo 回写 source_cache
                         new_geo_count = 0
+                        geo_rows = []
                         for item in enriched:
                             if item.get("geoRegion") or item.get("geoOperator"):
-                                cache_host_geo(item["sourceType"], item["host"], item.get("geoRegion", ""), item.get("geoOperator", ""))
+                                geo_rows.append((item["sourceType"], item["host"], item.get("geoRegion", ""), item.get("geoOperator", "")))
                                 new_geo_count += 1
+                        if geo_rows:
+                            await run_in_thread(cache_host_geo_batch, geo_rows)
 
                         if new_geo_count:
                             logger.info(f"💾 [geo缓存] {new_geo_count} 条新 geo 信息已写入 source_cache")

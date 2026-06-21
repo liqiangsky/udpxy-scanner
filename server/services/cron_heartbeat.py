@@ -91,6 +91,7 @@ async def execute_recheck() -> int:
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             failed_list = []
             success_items = []
+            _result_lock = asyncio.Lock()
             now_ms = int(__import__("time").time() * 1000)
 
             def dummy_should_stop():
@@ -108,9 +109,11 @@ async def execute_recheck() -> int:
                     result = await verify_single_host(session, host_raw, target_val, timeout_sec, dummy_should_stop, protocol=proto_val)
 
                     if result:
-                        success_items.append((result["delay"], now_ms, result["protocol"], source["id"]))
+                        async with _result_lock:
+                            success_items.append((result["delay"], now_ms, result["protocol"], source["id"]))
                     else:
-                        failed_list.append(source)
+                        async with _result_lock:
+                            failed_list.append(source)
 
             concurrency_sem = asyncio.Semaphore(concurrency)
             await asyncio.gather(*(recheck_worker(s) for s in active_sources))
@@ -145,10 +148,12 @@ async def execute_recheck() -> int:
                         result = await verify_single_host(session, host_raw, target_val, timeout_sec, dummy_should_stop, protocol=proto_val)
 
                         if result:
-                            second_success.append((result["delay"], now2_ms, result["protocol"], source["id"]))
+                            async with _result_lock:
+                                second_success.append((result["delay"], now2_ms, result["protocol"], source["id"]))
                         else:
-                            second_failed_ids.append((source["id"],))
-                            second_failed_hosts.append(source["host"])
+                            async with _result_lock:
+                                second_failed_ids.append((source["id"],))
+                                second_failed_hosts.append(source["host"])
 
                 await asyncio.gather(*(second_recheck(s) for s in failed_list))
 
