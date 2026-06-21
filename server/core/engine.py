@@ -6,7 +6,7 @@ import logging
 
 from typing import List
 
-from db.database import get_db, get_cache_db, get_iptv_db, get_setting
+from db.database import get_db, get_cache_db, get_iptv_db, get_setting, run_in_thread
 from core.status import task_runner
 from services.source_cache import get_cached_hosts, cache_sources, cache_host_geo, get_cached_geo_batch, get_existing_iptv_hosts_batch
 from services.validator import verify_single_host
@@ -16,6 +16,54 @@ logger = logging.getLogger("扫描引擎")
 
 # SQLite 写锁：序列化所有并发写入，防止 database is locked
 _db_write_lock = threading.Lock()
+
+
+def _fetch_scan_config(cfg_id: int):
+    with get_db() as conn:
+        return conn.execute("SELECT * FROM scan_config WHERE id=?", (cfg_id,)).fetchone()
+
+
+def _update_config_timestamp(cfg_id: int):
+    with get_db() as conn:
+        conn.execute("UPDATE scan_config SET updatedAt=datetime('now') WHERE id=?", (cfg_id,))
+
+
+def _fetch_enabled_subscriptions():
+    with get_db() as conn:
+        return [dict(r) for r in conn.execute("SELECT uid, name FROM api_subscriptions WHERE enabled=1").fetchall()]
+
+
+def _check_subscription_enabled(ds_uid: str):
+    with get_db() as conn:
+        row = conn.execute("SELECT uid, name FROM api_subscriptions WHERE uid=? AND enabled=1", (ds_uid,)).fetchone()
+        return dict(row) if row else None
+
+
+def _batch_insert_iptv(batch_rows: list, now_stamp: int):
+    _db_write_lock.acquire()
+    try:
+        with get_iptv_db() as conn:
+            conn.executemany("""
+                INSERT INTO iptv_list (
+                    host, ip, port,
+                    sourceType, sourceName,
+                    region, operator,
+                    geoRegion, geoOperator,
+                    delay, protocol,
+                    target, channelName,
+                    createTime, updateTime
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+                ON CONFLICT(host, target, channelName)
+                DO UPDATE SET
+                    delay = ?,
+                    updateTime = ?,
+                    geoRegion = ?,
+                    geoOperator = ?
+            """, batch_rows)
+    finally:
+        _db_write_lock.release()
 
 
 async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False):
@@ -57,11 +105,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                 logger.info(f"⛔ [停止扫描] 配置 id={cfg_id} 被用户停止")
                 break
 
-            with get_db() as conn:
-                row_data = conn.execute(
-                    "SELECT * FROM scan_config WHERE id=?",
-                    (cfg_id,)
-                ).fetchone()
+            row_data = await run_in_thread(lambda: _fetch_scan_config(cfg_id))
 
             if not row_data:
                 logger.warning(f"⚠️ [配置不存在] id={cfg_id}，跳过")
@@ -80,11 +124,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                 config["name"]
             )
 
-            with get_db() as conn:
-                conn.execute(
-                    "UPDATE scan_config SET updatedAt=datetime('now') WHERE id=?",
-                    (cfg_id,)
-                )
+            await run_in_thread(_update_config_timestamp, cfg_id)
 
             logger.info(f"🚀 [开始扫描] {config['name']}")
 
@@ -94,21 +134,13 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                 if raw_ds:
                     data_sources = [s.strip() for s in raw_ds.split(',') if s.strip()]
                 else:
-                    with get_db() as conn:
-                        subs = conn.execute(
-                            "SELECT uid, name FROM api_subscriptions WHERE enabled=1"
-                        ).fetchall()
+                    subs = await run_in_thread(_fetch_enabled_subscriptions)
                     data_sources = [s["uid"] for s in subs]
 
                 candidate_hosts = []  # list of (host, source_type, source_name)
                 for ds_uid in data_sources:
                     source_name = ds_uid
-                    # 校验：如果 dataSource 不存在或未启用则跳过
-                    with get_db() as conn:
-                        sub_row = conn.execute(
-                            "SELECT uid, name FROM api_subscriptions WHERE uid=? AND enabled=1",
-                            (ds_uid,)
-                        ).fetchone()
+                    sub_row = await run_in_thread(_check_subscription_enabled, ds_uid)
                     if not sub_row:
                         logger.warning(f"⚠️ [数据源跳过] uid='{ds_uid}' 不存在或未启用")
                         continue
@@ -206,50 +238,28 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
 
                         now_stamp = int(time.time() * 1000)
 
-                        _db_write_lock.acquire()
-                        try:
-                            with get_iptv_db() as conn:
-                                batch_rows = []
-                                for item in enriched:
-                                    host_item = item["host"]
-                                    if ":" in host_item:
-                                        ip_val, port_val = host_item.rsplit(":", 1)
-                                    else:
-                                        ip_val, port_val = host_item, 80
-                                    batch_rows.append((
-                                        host_item, ip_val, int(port_val),
-                                        item["sourceType"], item["sourceName"],
-                                        config.get("templateRegion", ""),
-                                        config.get("templateOperator", ""),
-                                        item["geoRegion"], item["geoOperator"],
-                                        item["delay"], item["protocol"],
-                                        config["templateTargetAddress"],
-                                        config["templateTargetName"],
-                                        now_stamp, now_stamp,
-                                        item["delay"], now_stamp,
-                                        item["geoRegion"], item["geoOperator"]
-                                    ))
-                                conn.executemany("""
-                                    INSERT INTO iptv_list (
-                                        host, ip, port,
-                                        sourceType, sourceName,
-                                        region, operator,
-                                        geoRegion, geoOperator,
-                                        delay, protocol,
-                                        target, channelName,
-                                        createTime, updateTime
-                                    ) VALUES (
-                                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                                    )
-                                    ON CONFLICT(host, target, channelName)
-                                    DO UPDATE SET
-                                        delay = ?,
-                                        updateTime = ?,
-                                        geoRegion = ?,
-                                        geoOperator = ?
-                                """, batch_rows)
-                        finally:
-                            _db_write_lock.release()
+                        batch_rows = []
+                        for item in enriched:
+                            host_item = item["host"]
+                            if ":" in host_item:
+                                ip_val, port_val = host_item.rsplit(":", 1)
+                            else:
+                                ip_val, port_val = host_item, 80
+                            batch_rows.append((
+                                host_item, ip_val, int(port_val),
+                                item["sourceType"], item["sourceName"],
+                                config.get("templateRegion", ""),
+                                config.get("templateOperator", ""),
+                                item["geoRegion"], item["geoOperator"],
+                                item["delay"], item["protocol"],
+                                config["templateTargetAddress"],
+                                config["templateTargetName"],
+                                now_stamp, now_stamp,
+                                item["delay"], now_stamp,
+                                item["geoRegion"], item["geoOperator"]
+                            ))
+
+                        await run_in_thread(_batch_insert_iptv, batch_rows, now_stamp)
 
                         valid_count = len(enriched)
 
@@ -260,11 +270,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                 logger.error(f"❌ [扫描异常] {config['name']} -> {e}")
 
             finally:
-                with get_db() as conn:
-                    conn.execute(
-                        "UPDATE scan_config SET updatedAt=datetime('now') WHERE id=?",
-                        (cfg_id,)
-                    )
+                await run_in_thread(_update_config_timestamp, cfg_id)
 
             # 配置间延迟（可中断）
             progress_now = task_runner.get_progress()

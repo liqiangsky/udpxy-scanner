@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from db.database import get_db, get_setting
+from db.database import get_db, get_setting, _settings_cache, _settings_cache_lock
 from db.models import GlobalSettingsUpdate
 from services.log_buffer import get_recent_logs
 import hashlib
@@ -35,6 +35,8 @@ def api_update_settings(data: GlobalSettingsUpdate):
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('janitor_cron', ?)", (data.janitorCron,))
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('scan_cron', ?)", (data.scanCron,))
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('push_api_key', ?)", (data.pushApiKey,))
+    with _settings_cache_lock:
+        _settings_cache.clear()
     return {"ok": True}
 
 

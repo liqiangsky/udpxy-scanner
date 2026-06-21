@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import time
+import threading
 from contextlib import contextmanager
 
 DB_PATH = os.getenv("DB_PATH", "udpxy_scanner.db")
@@ -9,6 +10,31 @@ IPTV_DB_PATH = os.getenv("IPTV_DB_PATH", "iptv_list.db")
 
 _settings_cache = {}
 _settings_cache_ttl = 30
+_settings_cache_lock = threading.Lock()
+
+_local = threading.local()
+_local_lock = threading.Lock()
+
+
+def _get_persistent_conn(db_path: str) -> sqlite3.Connection:
+    key = db_path
+    conn = getattr(_local, key, None)
+    if conn is not None:
+        try:
+            conn.execute("SELECT 1")
+            return conn
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    with _local_lock:
+        setattr(_local, key, conn)
+    return conn
 
 
 def init_cache_db():
@@ -155,84 +181,46 @@ def init_db():
 
 @contextmanager
 def get_db():
-    """主数据库连接管理"""
-    conn = sqlite3.connect(
-        DB_PATH,
-        timeout=30,
-        check_same_thread=False
-    )
-
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-
+    """主数据库连接管理（线程级持久连接）"""
+    conn = _get_persistent_conn(DB_PATH)
     try:
         yield conn
         conn.commit()
-
     except Exception:
         conn.rollback()
         raise
-
-    finally:
-        conn.close()
 
 
 @contextmanager
 def get_cache_db():
-    """缓存数据库连接管理（source_cache 表）"""
-    conn = sqlite3.connect(
-        CACHE_DB_PATH,
-        timeout=30,
-        check_same_thread=False
-    )
-
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-
+    """缓存数据库连接管理（source_cache 表，线程级持久连接）"""
+    conn = _get_persistent_conn(CACHE_DB_PATH)
     try:
         yield conn
         conn.commit()
-
     except Exception:
         conn.rollback()
         raise
-
-    finally:
-        conn.close()
 
 
 @contextmanager
 def get_iptv_db():
-    """活源池数据库连接管理（iptv_list 表）"""
-    conn = sqlite3.connect(
-        IPTV_DB_PATH,
-        timeout=30,
-        check_same_thread=False
-    )
-
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-
+    """活源池数据库连接管理（iptv_list 表，线程级持久连接）"""
+    conn = _get_persistent_conn(IPTV_DB_PATH)
     try:
         yield conn
         conn.commit()
-
     except Exception:
         conn.rollback()
         raise
 
-    finally:
-        conn.close()
-
 
 def get_setting(key: str, default: str) -> str:
     now = time.time()
-    cached = _settings_cache.get(key)
-    if cached and now - cached[1] < _settings_cache_ttl:
-        return cached[0]
+    with _settings_cache_lock:
+        cached = _settings_cache.get(key)
+        if cached and now - cached[1] < _settings_cache_ttl:
+            return cached[0]
     try:
         with get_db() as conn:
             row = conn.execute(
@@ -240,7 +228,16 @@ def get_setting(key: str, default: str) -> str:
                 (key,)
             ).fetchone()
             val = row["value"] if row else default
-            _settings_cache[key] = (val, now)
+            with _settings_cache_lock:
+                _settings_cache[key] = (val, now)
             return val
     except Exception:
         return default
+
+
+import asyncio as _asyncio
+
+
+async def run_in_thread(func, *args, **kwargs):
+    """将同步函数放到线程池执行，避免阻塞事件循环"""
+    return await _asyncio.to_thread(func, *args, **kwargs)

@@ -19,12 +19,27 @@ LOCKOUT_SECONDS = 300  # 5 分钟
 SESSION_TTL = 7 * 24 * 3600  # 7 天
 
 
+def _cleanup_sessions():
+    now = int(time.time())
+    expired = [t for t, s in _sessions.items() if now - s.get("created_at", 0) > SESSION_TTL]
+    for t in expired:
+        del _sessions[t]
+
+
+def _cleanup_login_attempts():
+    now = time.time()
+    expired = [ip for ip, r in _login_attempts.items() if now >= r.get("locked_until", 0) and r.get("count", 0) >= MAX_FAILED_ATTEMPTS]
+    for ip in expired:
+        del _login_attempts[ip]
+
+
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
 def check_rate_limit(client_ip: str):
     """检查是否被锁定"""
+    _cleanup_login_attempts()
     if client_ip not in _login_attempts:
         return
     record = _login_attempts[client_ip]
@@ -66,6 +81,7 @@ def api_login(request: Request, req: LoginRequest):
         raise HTTPException(401, "密码错误")
 
     reset_attempts(client_ip)
+    _cleanup_sessions()
     token = uuid.uuid4().hex
     now = int(time.time())
     _sessions[token] = {

@@ -44,7 +44,7 @@ app.add_middleware(
 
 
 # 内存 session 存储（由 auth 模块导入）
-from routers.auth import _sessions as auth_sessions
+from routers.auth import _sessions as auth_sessions, SESSION_TTL
 
 
 @app.middleware("http")
@@ -57,7 +57,12 @@ async def check_auth(request, call_next):
     # 用户登录 session 认证
     auth_token = request.headers.get("X-Auth-Token", "")
     if auth_token and auth_token in auth_sessions:
-        return await call_next(request)
+        import time as _time
+        session = auth_sessions[auth_token]
+        if _time.time() - session.get("created_at", 0) <= SESSION_TTL:
+            return await call_next(request)
+        else:
+            del auth_sessions[auth_token]
 
     return JSONResponse(status_code=401, content={"detail": "未认证"})
 

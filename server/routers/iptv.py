@@ -5,10 +5,20 @@ import time
 from typing import Optional
 from datetime import datetime
 
-from db.database import get_iptv_db, get_setting
+from db.database import get_iptv_db, get_setting, run_in_thread
 
 logger = logging.getLogger("组播源")
 router = APIRouter()
+
+
+def _fetch_iptv_source(source_id: int):
+    with get_iptv_db() as conn:
+        return conn.execute("SELECT * FROM iptv_list WHERE id=?", (source_id,)).fetchone()
+
+
+def _update_iptv_delay(delay: int, now: int, source_id: int):
+    with get_iptv_db() as conn:
+        conn.execute("UPDATE iptv_list SET delay=?, updateTime=? WHERE id=?", (delay, now, source_id))
 
 
 @router.get("/iptv-pool")
@@ -17,6 +27,8 @@ def api_get_iptv_pool(
     operator: Optional[str] = None,
     geo_region: Optional[str] = None,
     geo_operator: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 0,
 ):
 
     where_clauses = []
@@ -40,7 +52,15 @@ def api_get_iptv_pool(
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
+    if page < 1:
+        page = 1
+    if page_size < 0 or page_size > 2000:
+        page_size = 0
+    offset = (page - 1) * page_size if page_size > 0 else 0
+
     with get_iptv_db() as conn:
+        total_active = conn.execute(f"SELECT COUNT(*) AS cnt FROM iptv_list WHERE {where_sql}", params).fetchone()["cnt"]
+
         group_rows = conn.execute(f"""
             SELECT region, operator,
                    COUNT(*) AS cnt,
@@ -51,16 +71,25 @@ def api_get_iptv_pool(
             ORDER BY region ASC, operator ASC
         """, params).fetchall()
 
-        detail_rows = conn.execute(f"""
-            SELECT id, host, protocol, target, channelName, delay,
-                   sourceType, sourceName, region, operator,
-                   geoRegion, geoOperator, createTime, updateTime
-            FROM iptv_list
-            WHERE {where_sql}
-            ORDER BY region ASC, operator ASC, delay ASC, updateTime DESC
-        """, params).fetchall()
-
-    total_active = len(detail_rows)
+        if page_size > 0:
+            detail_rows = conn.execute(f"""
+                SELECT id, host, protocol, target, channelName, delay,
+                       sourceType, sourceName, region, operator,
+                       geoRegion, geoOperator, createTime, updateTime
+                FROM iptv_list
+                WHERE {where_sql}
+                ORDER BY region ASC, operator ASC, delay ASC, updateTime DESC
+                LIMIT ? OFFSET ?
+            """, params + [page_size, offset]).fetchall()
+        else:
+            detail_rows = conn.execute(f"""
+                SELECT id, host, protocol, target, channelName, delay,
+                       sourceType, sourceName, region, operator,
+                       geoRegion, geoOperator, createTime, updateTime
+                FROM iptv_list
+                WHERE {where_sql}
+                ORDER BY region ASC, operator ASC, delay ASC, updateTime DESC
+            """, params).fetchall()
 
     group_map = {}
     for gr in group_rows:
@@ -120,6 +149,9 @@ def api_get_iptv_pool(
     return {
         "totalActiveHeads": total_active,
         "totalGroups": len(result_list),
+        "page": page,
+        "pageSize": page_size,
+        "totalPages": (total_active + page_size - 1) // page_size if page_size > 0 else 1,
         "groups": result_list
     }
 
@@ -127,8 +159,7 @@ def api_get_iptv_pool(
 @router.post("/iptv/{source_id}/test-delay")
 async def api_test_delay(source_id: int):
     """测试单个活源延迟，更新数据库并返回最新延迟"""
-    with get_iptv_db() as conn:
-        row = conn.execute("SELECT * FROM iptv_list WHERE id=?", (source_id,)).fetchone()
+    row = await run_in_thread(lambda: _fetch_iptv_source(source_id))
 
     if not row:
         return {"ok": False, "error": "源不存在"}
@@ -156,22 +187,14 @@ async def api_test_delay(source_id: int):
                 if r.status in [200, 206] and await r.content.read(512):
                     delay = int((time.time() - start_t) * 1000)
                     now = int(time.time() * 1000)
-                    with get_iptv_db() as conn:
-                        conn.execute(
-                            "UPDATE iptv_list SET delay=?, updateTime=? WHERE id=?",
-                            (delay, now, source_id)
-                        )
+                    await run_in_thread(_update_iptv_delay, delay, now, source_id)
                     logger.info(f"✅ [延迟测试] id={source_id} -> {delay}ms")
                     return {"ok": True, "delay": delay}
     except Exception as e:
         logger.warning(f"⚠️ [延迟测试失败] id={source_id} -> {e}")
 
     now = int(time.time() * 1000)
-    with get_iptv_db() as conn:
-        conn.execute(
-            "UPDATE iptv_list SET delay=?, updateTime=? WHERE id=?",
-            (-1, now, source_id)
-        )
+    await run_in_thread(_update_iptv_delay, -1, now, source_id)
     return {"ok": False, "delay": -1}
 
 

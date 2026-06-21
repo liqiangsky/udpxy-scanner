@@ -8,7 +8,7 @@ import asyncio
 import aiohttp
 import logging
 from db.database import get_db, get_cache_db, get_iptv_db, get_setting
-from core.engine import trigger_background_queue
+from core.engine import trigger_background_queue, _db_write_lock
 from core.status import task_runner
 from services.source_cache import cache_sources
 
@@ -76,7 +76,7 @@ async def execute_recheck() -> int:
     from services.validator import verify_single_host
 
     with get_iptv_db() as conn:
-        active_sources = [dict(r) for r in conn.execute("SELECT * FROM iptv_list").fetchall()]
+        active_sources = [dict(r) for r in conn.execute("SELECT id, host, target, protocol FROM iptv_list").fetchall()]
 
     if not active_sources:
         return 0
@@ -116,11 +116,12 @@ async def execute_recheck() -> int:
             await asyncio.gather(*(recheck_worker(s) for s in active_sources))
 
             if success_items:
-                with get_iptv_db() as conn:
-                    conn.executemany(
-                        "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
-                        success_items
-                    )
+                with _db_write_lock:
+                    with get_iptv_db() as conn:
+                        conn.executemany(
+                            "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
+                            success_items
+                        )
 
             eliminated = 0
 
@@ -152,24 +153,26 @@ async def execute_recheck() -> int:
                 await asyncio.gather(*(second_recheck(s) for s in failed_list))
 
                 if second_success:
-                    with get_iptv_db() as conn:
-                        conn.executemany(
-                            "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
-                            second_success
-                        )
+                    with _db_write_lock:
+                        with get_iptv_db() as conn:
+                            conn.executemany(
+                                "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
+                                second_success
+                            )
                     logger.info(f"✅ [二次恢复] {len(second_success)} 个二次复测成功")
 
                 if second_failed_ids:
-                    with get_iptv_db() as conn:
-                        conn.executemany(
-                            "DELETE FROM iptv_list WHERE id=?",
-                            second_failed_ids
-                        )
-                    with get_cache_db() as conn:
-                        conn.executemany(
-                            "DELETE FROM source_cache WHERE host=?",
-                            [(h,) for h in second_failed_hosts]
-                        )
+                    with _db_write_lock:
+                        with get_iptv_db() as conn:
+                            conn.executemany(
+                                "DELETE FROM iptv_list WHERE id=?",
+                                second_failed_ids
+                            )
+                        with get_cache_db() as conn:
+                            conn.executemany(
+                                "DELETE FROM source_cache WHERE host=?",
+                                [(h,) for h in second_failed_hosts]
+                            )
                     eliminated = len(second_failed_ids)
                     logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个源（两次复测均失败）")
 
