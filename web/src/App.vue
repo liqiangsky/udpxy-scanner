@@ -54,7 +54,7 @@ const showLoginBtn = computed(() => {
 
 const handleLogout = async () => {
   await authStore.logout()
-  router.push('/')
+  router.push('/login')
 }
 </script>
 
