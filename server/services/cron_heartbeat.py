@@ -215,7 +215,6 @@ async def handle_heartbeat() -> dict:
         if task_runner.is_idle():
             logger.info(f"⏰ [心跳触发] 定时复测 -> cron: {janitor_cron}")
             import threading
-            import asyncio
             def run_recheck():
                 asyncio.run(execute_recheck())
             threading.Thread(target=run_recheck, daemon=True).start()
