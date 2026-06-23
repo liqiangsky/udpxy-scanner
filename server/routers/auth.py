@@ -9,14 +9,14 @@ from db.database import get_db, get_setting
 
 router = APIRouter()
 
-# 简单内存存储 session
 _sessions: dict[str, dict] = {}
-
-# 登录失败限制：key=IP, value={count, locked_until}
 _login_attempts: dict[str, dict] = {}
 MAX_FAILED_ATTEMPTS = 5
-LOCKOUT_SECONDS = 300  # 5 分钟
-SESSION_TTL = 7 * 24 * 3600  # 7 天
+LOCKOUT_SECONDS = 300
+SESSION_TTL = 7 * 24 * 3600
+
+_PBKDF2_ITERATIONS = 100000
+_SALT = b"udpxy-scanner-password-salt"
 
 
 def _cleanup_sessions():
@@ -34,7 +34,15 @@ def _cleanup_login_attempts():
 
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return hashlib.pbkdf2_hmac("sha256", password.encode(), _SALT, _PBKDF2_ITERATIONS).hex()
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    if stored_hash.startswith("pbkdf2$"):
+        stored_hash = stored_hash[7:]
+        return hash_password(password) == stored_hash
+    legacy_hash = hashlib.sha256(password.encode()).hexdigest()
+    return legacy_hash == stored_hash
 
 
 def check_rate_limit(client_ip: str):
@@ -76,7 +84,7 @@ def api_login(request: Request, req: LoginRequest):
     if not stored_hash:
         raise HTTPException(500, "密码未初始化")
 
-    if hash_password(req.password) != stored_hash:
+    if not _verify_password(req.password, stored_hash):
         record_failure(client_ip)
         raise HTTPException(401, "密码错误")
 
@@ -109,11 +117,11 @@ class ChangePasswordRequest(BaseModel):
 @router.post("/change-password")
 def api_change_password(req: ChangePasswordRequest):
     stored_hash = get_setting("password_hash", "")
-    if hash_password(req.oldPassword) != stored_hash:
+    if not _verify_password(req.oldPassword, stored_hash):
         raise HTTPException(400, "旧密码错误")
     if len(req.newPassword) < 4:
         raise HTTPException(400, "新密码至少 4 位")
-    new_hash = hash_password(req.newPassword)
+    new_hash = "pbkdf2$" + hash_password(req.newPassword)
     with get_db() as conn:
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('password_hash', ?)", (new_hash,))
     # 清除所有已有 session，强制重新登录

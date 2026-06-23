@@ -44,21 +44,19 @@ def api_update_subscription(sub_id: int, data: ApiSubscriptionCreate):
         row = conn.execute("SELECT id FROM api_subscriptions WHERE id=?", (sub_id,)).fetchone()
         if not row:
             raise HTTPException(404, "订阅不存在")
-        old = conn.execute("SELECT uid, name FROM api_subscriptions WHERE id=?", (sub_id,)).fetchone()
+        old = conn.execute("SELECT uid FROM api_subscriptions WHERE id=?", (sub_id,)).fetchone()
         old_uid = old["uid"]
-        old_name = old["name"]
         conn.execute(
             "UPDATE api_subscriptions SET name=?, uid=?, url=?, enabled=?, fetchCron=?, updatedAt=datetime('now') WHERE id=?",
             (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron, sub_id)
         )
         # uid 变更时同步更新 source_cache 中的 sourceType
-        if old_uid != data.uid or old_name != data.name:
+        if old_uid != data.uid:
             with get_cache_db() as cconn:
-                if old_uid != data.uid:
-                    cconn.execute(
-                        "UPDATE source_cache SET sourceType=? WHERE sourceType=?",
-                        (data.uid, old_uid)
-                    )
+                cconn.execute(
+                    "UPDATE source_cache SET sourceType=? WHERE sourceType=?",
+                    (data.uid, old_uid)
+                )
     return {"ok": True}
 
 

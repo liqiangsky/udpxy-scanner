@@ -8,6 +8,7 @@ import ip2region.searcher as xdb_searcher
 import ip2region.util as xdb_util
 
 from db.database import run_in_thread
+from services.regions import MAINLAND_REGIONS
 
 logger = logging.getLogger("GeoIP")
 
@@ -62,17 +63,6 @@ _AUTONOMOUS_PREFIXES = {
     "新疆": "新疆",
 }
 
-_MAINLAND_REGIONS = frozenset({
-    "北京", "上海", "天津", "重庆",
-    "浙江", "江苏", "广东", "山东",
-    "安徽", "福建", "湖北", "湖南",
-    "河南", "河北", "江西", "山西",
-    "四川", "云南", "贵州", "西藏",
-    "陕西", "甘肃", "青海", "宁夏",
-    "新疆", "黑龙江", "吉林", "辽宁",
-    "广西", "内蒙古", "海南"
-})
-
 def _normalize_province(raw: str) -> str:
     if not raw:
         return ""
@@ -88,6 +78,14 @@ def _normalize_province(raw: str) -> str:
 
 
 def _query_ip2region(ip: str) -> dict:
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
+            logger.info(f"🌍 [ip2region] {ip} 私有/内网IP，已排除")
+            return {"region": "", "operator": "", "countryCode": "", "is_foreign": True}
+    except ValueError:
+        pass
+
     searcher = _get_searcher()
     if not searcher:
         return {"region": "", "operator": "", "countryCode": ""}
@@ -106,7 +104,7 @@ def _query_ip2region(ip: str) -> dict:
             logger.info(f"🌍 [ip2region] {ip} 国外IP({code})，已排除")
             return {"region": "", "operator": "", "countryCode": code, "is_foreign": True}
         region = _normalize_province(province_raw)
-        if region not in _MAINLAND_REGIONS:
+        if region not in MAINLAND_REGIONS:
             logger.info(f"🌍 [ip2region] {ip} 非大陆({province_raw}->{region})，已排除")
             return {"region": "", "operator": "", "countryCode": code, "is_foreign": True}
         operator = "" if isp == "0" else isp
@@ -148,80 +146,82 @@ async def _health_check_batch(session: aiohttp.ClientSession, hosts: list[dict],
     return valid
 
 
-async def enrich_geo_batch(sources: list[dict], session: aiohttp.ClientSession = None) -> list[dict]:
+async def enrich_geo_batch(sources: list[dict], session: aiohttp.ClientSession = None, skip_health_check: bool = False) -> list[dict]:
     from services.source_cache import get_cached_geo_batch
 
     own_session = session is None
     if own_session:
         session = aiohttp.ClientSession()
+
     try:
-        sources = await _health_check_batch(session, sources)
+        if not skip_health_check:
+            sources = await _health_check_batch(session, sources)
+            if not sources:
+                return []
+
+        enriched = []
+        queried_count = 0
+        skipped_count = 0
+        cache_hit_count = 0
+        foreign_count = 0
+        resolve_fail_count = 0
+
+        need_geo_hosts = []
+        for item in sources:
+            if item.get("geoRegion") or item.get("geoOperator"):
+                skipped_count += 1
+                enriched.append(item)
+            else:
+                need_geo_hosts.append(item)
+
+        if need_geo_hosts:
+            host_keys = [item.get("host", "") for item in need_geo_hosts]
+            cached_geo_map = get_cached_geo_batch(host_keys)
+
+            still_need_query = []
+            for item in need_geo_hosts:
+                host = item.get("host", "")
+                cached = cached_geo_map.get(host)
+                if cached:
+                    enriched.append({**item, **cached})
+                    cache_hit_count += 1
+                else:
+                    still_need_query.append(item)
+
+            if still_need_query:
+                resolve_tasks = [(_resolve_to_ip(item.get("host", "")), item) for item in still_need_query]
+                resolve_results = await asyncio.gather(*(t[0] for t in resolve_tasks))
+
+                host_to_ip = {}
+                for idx, ip in enumerate(resolve_results):
+                    item = resolve_tasks[idx][1]
+                    host = item.get("host", "")
+                    if ip:
+                        host_to_ip[host] = ip
+                    else:
+                        resolve_fail_count += 1
+                        enriched.append(item)
+
+                for item in still_need_query:
+                    host = item.get("host", "")
+                    ip = host_to_ip.get(host)
+                    if not ip:
+                        continue
+                    geo = await run_in_thread(_query_ip2region, ip)
+                    if geo.get("is_foreign"):
+                        foreign_count += 1
+                        continue
+                    region_val = geo.get("region", "")
+                    operator_val = geo.get("operator", "")
+                    queried_count += 1
+                    enriched.append({
+                        **item,
+                        "geoRegion": region_val,
+                        "geoOperator": operator_val
+                    })
+
+        logger.info(f"🌍 [geoip富化] 共 {len(sources)} 条, 缓存命中 {cache_hit_count} 条, 本地查询 {queried_count} 条, 已有geo跳过 {skipped_count} 条, 国外IP排除 {foreign_count} 条, DNS解析失败 {resolve_fail_count} 条")
+        return enriched
     finally:
         if own_session:
             await session.close()
-    if not sources:
-        return []
-
-    enriched = []
-    queried_count = 0
-    skipped_count = 0
-    cache_hit_count = 0
-    foreign_count = 0
-    resolve_fail_count = 0
-
-    need_geo_hosts = []
-    for item in sources:
-        if item.get("geoRegion") or item.get("geoOperator"):
-            skipped_count += 1
-            enriched.append(item)
-        else:
-            need_geo_hosts.append(item)
-
-    if need_geo_hosts:
-        host_keys = [item.get("host", "") for item in need_geo_hosts]
-        cached_geo_map = get_cached_geo_batch(host_keys)
-
-        still_need_query = []
-        for item in need_geo_hosts:
-            host = item.get("host", "")
-            cached = cached_geo_map.get(host)
-            if cached:
-                enriched.append({**item, **cached})
-                cache_hit_count += 1
-            else:
-                still_need_query.append(item)
-
-        if still_need_query:
-            resolve_tasks = [(_resolve_to_ip(item.get("host", "")), item) for item in still_need_query]
-            resolve_results = await asyncio.gather(*(t[0] for t in resolve_tasks))
-
-            host_to_ip = {}
-            for idx, ip in enumerate(resolve_results):
-                item = resolve_tasks[idx][1]
-                host = item.get("host", "")
-                if ip:
-                    host_to_ip[host] = ip
-                else:
-                    resolve_fail_count += 1
-                    enriched.append(item)
-
-            for item in still_need_query:
-                host = item.get("host", "")
-                ip = host_to_ip.get(host)
-                if not ip:
-                    continue
-                geo = await run_in_thread(_query_ip2region, ip)
-                if geo.get("is_foreign"):
-                    foreign_count += 1
-                    continue
-                region_val = geo.get("region", "")
-                operator_val = geo.get("operator", "")
-                queried_count += 1
-                enriched.append({
-                    **item,
-                    "geoRegion": region_val,
-                    "geoOperator": operator_val
-                })
-
-    logger.info(f"🌍 [geoip富化] 共 {len(sources)} 条, 缓存命中 {cache_hit_count} 条, 本地查询 {queried_count} 条, 已有geo跳过 {skipped_count} 条, 国外IP排除 {foreign_count} 条, DNS解析失败 {resolve_fail_count} 条")
-    return enriched

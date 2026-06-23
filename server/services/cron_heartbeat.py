@@ -94,19 +94,17 @@ async def execute_recheck() -> int:
             _result_lock = asyncio.Lock()
             now_ms = int(__import__("time").time() * 1000)
 
-            def dummy_should_stop():
-                return False
-
             async def recheck_worker(source):
                 async with concurrency_sem:
-                    if task_runner.should_pause_recheck():
-                        while task_runner.should_pause_recheck():
-                            await asyncio.sleep(2)
+                    while task_runner.should_pause_recheck():
+                        if task_runner.should_stop_recheck():
+                            return
+                        await asyncio.sleep(2)
 
                     host_raw = source["host"]
                     target_val = source["target"]
                     proto_val = source["protocol"]
-                    result = await verify_single_host(session, host_raw, target_val, timeout_sec, dummy_should_stop, protocol=proto_val)
+                    result = await verify_single_host(session, host_raw, target_val, timeout_sec, lambda: task_runner.should_stop_recheck(), protocol=proto_val)
 
                     if result:
                         async with _result_lock:
@@ -138,14 +136,15 @@ async def execute_recheck() -> int:
 
                 async def second_recheck(source):
                     async with concurrency_sem:
-                        if task_runner.should_pause_recheck():
-                            while task_runner.should_pause_recheck():
-                                await asyncio.sleep(2)
+                        while task_runner.should_pause_recheck():
+                            if task_runner.should_stop_recheck():
+                                return
+                            await asyncio.sleep(2)
 
                         host_raw = source["host"]
                         target_val = source["target"]
                         proto_val = source["protocol"]
-                        result = await verify_single_host(session, host_raw, target_val, timeout_sec, dummy_should_stop, protocol=proto_val)
+                        result = await verify_single_host(session, host_raw, target_val, timeout_sec, lambda: task_runner.should_stop_recheck(), protocol=proto_val)
 
                         if result:
                             async with _result_lock:
@@ -200,12 +199,15 @@ async def handle_heartbeat() -> dict:
     # 通用扫描 cron
     scan_cron = get_setting("scan_cron", "")
     if cron_match(scan_cron, cron_now) and _should_exec("scan", now):
-        with get_db() as conn:
-            rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
-        if rows:
-            ids = [r["id"] for r in rows]
-            trigger_background_queue(ids, skip_disabled=True)
-            triggered.append({"task": "scan", "config_ids": ids})
+        if task_runner.is_idle():
+            with get_db() as conn:
+                rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
+            if rows:
+                ids = [r["id"] for r in rows]
+                trigger_background_queue(ids, skip_disabled=True)
+                triggered.append({"task": "scan", "config_ids": ids})
+        else:
+            logger.info("⏭️ [心跳扫描跳过] 有运行中的任务，等待下次触发")
 
     # 复测任务触发
     janitor_cron = get_setting("janitor_cron", "")
@@ -219,27 +221,34 @@ async def handle_heartbeat() -> dict:
             threading.Thread(target=run_recheck, daemon=True).start()
             triggered.append({"task": "recheck", "status": "started"})
 
-    # 订阅源定时拉取
+    # 订阅源定时拉取（并发）
     with get_db() as conn:
         subscriptions = conn.execute(
             "SELECT * FROM api_subscriptions WHERE enabled=1 AND fetchCron!=''"
         ).fetchall()
 
-    for sub in subscriptions:
-        fetch_cron = sub["fetchCron"]
-        if cron_match(fetch_cron, cron_now) and _should_exec(f"sub_{sub['id']}", now):
-            logger.info(f"⏰ 订阅触发 {sub['name']} -> cron: {fetch_cron}")
-            from services.subscription_fetcher import fetch_subscription
-            from services.source_cache import process_source_data
-            sources = await fetch_subscription(sub["name"], sub["uid"], sub["url"])
-            if sources:
-                hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-                await process_source_data(sub["uid"], hosts_data)
-            with get_db() as conn:
-                conn.execute(
-                    "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
-                    (datetime.datetime.now().isoformat(), sub["id"])
-                )
-            triggered.append({"task": f"sub_{sub['id']}", "name": sub["name"]})
+    async def _fetch_and_process(sub_dict):
+        fetch_cron = sub_dict["fetchCron"]
+        if not cron_match(fetch_cron, cron_now) or not _should_exec(f"sub_{sub_dict['id']}", now):
+            return None
+        logger.info(f"⏰ 订阅触发 {sub_dict['name']} -> cron: {fetch_cron}")
+        from services.subscription_fetcher import fetch_subscription
+        from services.source_cache import process_source_data
+        sources = await fetch_subscription(sub_dict["name"], sub_dict["uid"], sub_dict["url"])
+        if sources:
+            hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
+            await process_source_data(sub_dict["uid"], hosts_data)
+        return sub_dict
+
+    sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub)) for sub in subscriptions))
+    for sub_dict in sub_results:
+        if sub_dict is None:
+            continue
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
+                (datetime.datetime.now().isoformat(), sub_dict["id"])
+            )
+        triggered.append({"task": f"sub_{sub_dict['id']}", "name": sub_dict["name"]})
 
     return triggered

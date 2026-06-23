@@ -50,8 +50,8 @@ from routers.auth import _sessions as auth_sessions, SESSION_TTL
 @app.middleware("http")
 async def check_auth(request, call_next):
     """所有接口需要登录 session 认证"""
-    # 豁免路径：登录、登出、外部推送
-    if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/cron/heartbeat", "/api/source-cache/list", "/api/source-cache/delete"):
+    # 豁免路径：登录、登出、外部推送、cron心跳
+    if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/cron/heartbeat", "/api/source-cache/list"):
         return await call_next(request)
 
     # 用户登录 session 认证

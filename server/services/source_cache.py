@@ -8,16 +8,7 @@ from db.database import get_cache_db
 
 logger = logging.getLogger("数据缓存")
 
-_CN_REGIONS = {
-    "北京", "上海", "天津", "重庆",
-    "浙江", "江苏", "广东", "山东",
-    "安徽", "福建", "湖北", "湖南",
-    "河南", "河北", "江西", "山西",
-    "四川", "云南", "贵州", "西藏",
-    "陕西", "甘肃", "青海", "宁夏",
-    "新疆", "黑龙江", "吉林", "辽宁",
-    "广西", "内蒙古", "海南"
-}
+from services.regions import MAINLAND_REGIONS as _CN_REGIONS
 
 
 def cache_sources(source_type: str, sources: List[dict]):

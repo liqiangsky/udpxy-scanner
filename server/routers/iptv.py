@@ -117,12 +117,12 @@ def api_get_iptv_pool(
 
         try:
             last_seen = datetime.fromtimestamp(row["updateTime"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
+        except (OSError, ValueError, OverflowError):
             last_seen = ""
 
         try:
             create_time = datetime.fromtimestamp(row["createTime"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
+        except (OSError, ValueError, OverflowError):
             create_time = ""
 
         group_map[group_key]["heads"].append({

@@ -2,12 +2,8 @@ from fastapi import APIRouter, Query
 from db.database import get_db, get_setting, _settings_cache, _settings_cache_lock
 from db.models import GlobalSettingsUpdate
 from services.log_buffer import get_recent_logs
-import hashlib
 
 router = APIRouter()
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
 
 
 @router.get("/settings")

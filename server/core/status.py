@@ -1,138 +1,132 @@
 import threading
 import time
 
+
 class TaskRunnerStatus:
+    """
+    扫描队列状态管理。
+    - _should_stop: 停止整个队列（stop），循环退出后不再自动续跑
+    - _interrupt_current: 中断当前正在执行的配置，跳到下一个（stop_current）
+    """
+
     def __init__(self):
         self._lock = threading.Lock()
         self._running = False
         self._should_stop = False
+        self._interrupt_current = False
+        self._interrupt_target = None  # 中断针对的配置 ID（用于区分 "停止当前任务" 和 "跳过下一个"）
         self._current_index = 0
         self._total = 0
         self._current_name = ""
         self._config_ids = []
-        self._skip_config_ids = set()
-        self._scanning_config_id = None
 
         # 复测协调
         self._rechecking = False
         self._pause_recheck = False
+        self._recheck_stop_requested = False
 
     def start(self, total_count: int, config_ids: list = None):
-        # 等待复测完成（最多等 5 分钟）
+        # 请求复测暂停，等待已有复测 worker 退出（最多等 10 秒）
         with self._lock:
-            self._pause_recheck = True  # 先标记暂停，复测 worker 收到后进入等待
+            self._pause_recheck = True
         waited = 0
-        while waited < 300:
+        while waited < 10:
             with self._lock:
                 if not self._rechecking:
                     break
-            time.sleep(2)
-            waited += 2
+            time.sleep(0.5)
+            waited += 0.5
 
         with self._lock:
             self._rechecking = False
             self._pause_recheck = False
             self._running = True
             self._should_stop = False
+            self._interrupt_current = False
             self._current_index = 0
             self._total = total_count
             self._current_name = ""
-            self._skip_config_ids = set()
-            self._scanning_config_id = None
             if config_ids:
-                self._config_ids = config_ids
+                self._config_ids = list(config_ids)
 
     def stop(self):
-        """停止整个任务队列"""
+        """停止整个队列：当前任务和所有排队任务都停止"""
         with self._lock:
             self._should_stop = True
+            self._interrupt_current = True
+            self._interrupt_target = "__all__"  # 特殊标记，表示停止整个队列
 
-    def stop_current_and_continue(self, config_id: int):
-        """停止当前扫描，并标记该配置为跳过，剩余配置继续执行"""
+    def stop_current_and_continue(self):
+        """中断当前正在执行的配置，队列继续执行下一个"""
         with self._lock:
-            self._skip_config_ids.add(config_id)
-            self._should_stop = True
-            self._scanning_config_id = config_id
+            # 获取当前正在执行的配置 ID
+            if self._config_ids and 0 <= self._current_index < len(self._config_ids):
+                self._interrupt_target = self._config_ids[self._current_index]
+            self._interrupt_current = True
 
     def should_stop(self) -> bool:
+        """整个队列是否已停止"""
         with self._lock:
-            # 如果配置已停止，worker 应该退出
-            if self._scanning_config_id is not None:
-                return True
             return self._should_stop
+
+    def should_interrupt(self) -> bool:
+        """当前配置是否需要被中断（整个队列停止 或 当前配置被跳过）"""
+        with self._lock:
+            return self._interrupt_current
+
+    def get_interrupt_target(self):
+        """获取中断针对的配置 ID"""
+        with self._lock:
+            return self._interrupt_target
 
     def clear_interrupt(self):
         """清除中断标记，允许下一个配置正常执行"""
         with self._lock:
-            self._scanning_config_id = None
-
-    def get_scanning_config_id(self):
-        with self._lock:
-            return self._scanning_config_id
-
-    def is_config_skipped(self, config_id: int) -> bool:
-        with self._lock:
-            return config_id in self._skip_config_ids
-
-    def pop_skipped_configs(self) -> list:
-        """获取被跳过的配置 ID，并清空列表"""
-        with self._lock:
-            ids = list(self._skip_config_ids)
-            self._skip_config_ids.clear()
-            self._scanning_config_id = None
-            return ids
+            self._interrupt_current = False
+            self._interrupt_target = None
 
     def remove_from_queue(self, config_id: int):
-        """从队列中移除配置"""
+        """从队列中移除排队中的配置（同 ID 多个时移除最后一个）。不允许移除已完成或正在执行的。"""
         with self._lock:
-            if config_id in self._config_ids:
-                self._config_ids.remove(config_id)
-                self._total = len(self._config_ids)
-                return True
+            if config_id not in self._config_ids:
+                return False
+            # 从后往前找，移除最后一个匹配项（避免误删已执行的同 ID 配置）
+            for idx in range(len(self._config_ids) - 1, -1, -1):
+                if self._config_ids[idx] == config_id:
+                    if idx < self._current_index:
+                        return False  # 所有匹配项都在已执行区间
+                    if idx == self._current_index:
+                        return False  # 正在执行，用 stop_current
+                    self._config_ids.pop(idx)
+                    self._total = len(self._config_ids)
+                    return True
             return False
 
-    def finish(self):
+    def get_current_config_id(self) -> int | None:
+        """获取当前正在执行的配置 ID"""
         with self._lock:
-            # 当前项之后是否还有排队任务
-            remaining = len(self._config_ids) - self._current_index - 1
-            self._scanning_config_id = None
+            if self._config_ids and 0 <= self._current_index < len(self._config_ids):
+                return self._config_ids[self._current_index]
+            return None
+
+    def get_remaining_ids(self) -> list:
+        """获取当前及之后所有排队的配置 ID"""
+        with self._lock:
+            return list(self._config_ids[self._current_index:])
+
+    def is_idle(self) -> bool:
+        with self._lock:
+            return not self._running and not self._rechecking
+
+    def finish(self):
+        """当前队列执行结束，清理状态"""
+        with self._lock:
+            self._running = False
+            self._interrupt_current = False
             self._current_index = 0
             self._total = 0
             self._current_name = ""
-            self._pause_recheck = False
-            self._running = remaining > 0
-            # 无剩余任务时清空队列，避免残留ID影响progress接口
-            if remaining <= 0:
-                self._config_ids = []
-
-    def is_idle(self) -> bool:
-        with self._lock: return not self._running
-
-    def set_rechecking(self):
-        """标记复测开始"""
-        with self._lock:
-            self._rechecking = True
-            self._pause_recheck = False
-
-    def clear_rechecking(self):
-        """标记复测结束"""
-        with self._lock:
-            self._rechecking = False
-            self._pause_recheck = False
-
-    def should_pause_recheck(self) -> bool:
-        """复测 worker 检查是否应该暂停"""
-        with self._lock:
-            return self._pause_recheck
-
-    def enqueue(self, config_ids: list):
-        """运行时追加配置到队列末尾，跳过已在队列中的"""
-        with self._lock:
-            existing = set(self._config_ids)
-            new_ids = [cid for cid in config_ids if cid not in existing]
-            self._config_ids.extend(new_ids)
-            self._total = len(self._config_ids)
-            return self._total
+            self._config_ids = []
 
     def update_progress(self, index: int, name: str):
         with self._lock:
@@ -141,13 +135,42 @@ class TaskRunnerStatus:
 
     def get_progress(self) -> dict:
         with self._lock:
+            queued_after = self._config_ids[self._current_index + 1:] if self._config_ids and self._current_index < len(self._config_ids) else []
             return {
                 "running": self._running,
                 "should_stop": self._should_stop,
                 "current_index": self._current_index,
                 "total": self._total,
                 "current_config_name": self._current_name,
-                "config_ids": list(self._config_ids)
+                "config_ids": list(self._config_ids),
+                "rechecking": self._rechecking
             }
+
+    # ---- 复测协调 ----
+
+    def set_rechecking(self):
+        with self._lock:
+            self._rechecking = True
+            self._pause_recheck = False
+            self._recheck_stop_requested = False
+
+    def clear_rechecking(self):
+        with self._lock:
+            self._rechecking = False
+            self._pause_recheck = False
+            self._recheck_stop_requested = False
+
+    def stop_recheck(self):
+        with self._lock:
+            self._recheck_stop_requested = True
+
+    def should_stop_recheck(self) -> bool:
+        with self._lock:
+            return self._recheck_stop_requested or self._pause_recheck
+
+    def should_pause_recheck(self) -> bool:
+        with self._lock:
+            return self._pause_recheck
+
 
 task_runner = TaskRunnerStatus()

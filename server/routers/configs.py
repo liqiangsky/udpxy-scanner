@@ -93,35 +93,51 @@ def api_trigger_single_config(config_id: int):
         if row["enabled"] != 1:
             raise HTTPException(400, "该配置已禁用")
     if task_runner.is_idle():
+        logger.info(f"▶️ [手动运行] 空闲状态，启动新队列 cfg_id={config_id}")
         trigger_background_queue([config_id])
     else:
+        logger.info(f"▶️ [手动运行] 运行中，追加 cfg_id={config_id}")
         enqueue_background_queue(config_id)
     return {"ok": True}
 
 @router.post("/configs/{config_id}/stop")
 def api_stop_single_config(config_id: int):
-    if task_runner.is_idle(): raise HTTPException(400, "当前无运行中的任务")
-    p = task_runner.get_progress()
-    if p["config_ids"] and p["current_index"] < len(p["config_ids"]):
-        current_running_id = p["config_ids"][p["current_index"]]
-        if current_running_id == config_id:
-            task_runner.stop_current_and_continue(config_id)
-            return {"ok": True}
+    if task_runner.is_idle():
+        raise HTTPException(400, "当前无运行中的任务")
+
+    # 当前正在执行的配置：中断并跳到下一个
+    current_id = task_runner.get_current_config_id()
+    logger.info(f"🛑 [停止请求] cfg_id={config_id}, current_id={current_id}, queue={task_runner._config_ids}")
+
+    if current_id == config_id:
+        task_runner.stop_current_and_continue()
+        logger.info(f"🛑 [中断当前] cfg_id={config_id}，将跳到下一个")
+        return {"ok": True, "msg": "已中断当前任务，自动进入下一个"}
+
+    # 排队中的配置：从队列移除（不包括已完成和正在执行的）
     if task_runner.remove_from_queue(config_id):
-        return {"ok": True}
-    raise HTTPException(400, "该配置不在扫描队列中")
+        logger.info(f"🛑 [移除排队] cfg_id={config_id}，新队列={task_runner._config_ids}")
+        return {"ok": True, "msg": "已从队列移除"}
+
+    logger.warning(f"⚠️ [停止失败] cfg_id={config_id} 不在队列中（可能已完成或正在执行）")
+    raise HTTPException(400, "该配置不在队列中（可能已完成或正在执行）")
 
 @router.post("/configs/run-all")
 def api_trigger_run_all():
     if task_runner.is_idle():
         with get_db() as conn: rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
         if not rows: raise HTTPException(400, "无可用激活配置")
-        trigger_background_queue([r["id"] for r in rows], skip_disabled=True)
+        ids = [r["id"] for r in rows]
+        logger.info(f"▶️ [全部运行] 空闲状态，启动新队列 ids={ids}")
+        trigger_background_queue(ids, skip_disabled=True)
     else:
         with get_db() as conn: rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
         if not rows: raise HTTPException(400, "无可用激活配置")
+        added = []
         for r in rows:
             enqueue_background_queue(r["id"])
+            added.append(r["id"])
+        logger.info(f"▶️ [全部运行] 运行中，追加 ids={added}")
     return {"ok": True}
 
 @router.get("/configs/progress")

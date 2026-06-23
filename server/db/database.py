@@ -32,6 +32,9 @@ def _get_persistent_conn(db_path: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA cache_size=-64000")
     with _local_lock:
         setattr(_local, key, conn)
     return conn
@@ -51,8 +54,8 @@ def init_cache_db():
             geoOperator TEXT DEFAULT '',
             createdAt TEXT DEFAULT (datetime('now'))
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_source_cache_unique ON source_cache(sourceType, host);
-        CREATE INDEX IF NOT EXISTS idx_source_cache_host ON source_cache(host);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_source_cache_unique ON source_cache(host);
+        CREATE INDEX IF NOT EXISTS idx_source_cache_sourceType ON source_cache(sourceType);
     """)
     conn.commit()
     conn.close()
@@ -87,6 +90,8 @@ def init_iptv_db():
         CREATE INDEX IF NOT EXISTS idx_geo ON iptv_list(geoRegion, geoOperator);
         CREATE INDEX IF NOT EXISTS idx_iptv_host ON iptv_list(host);
         CREATE INDEX IF NOT EXISTS idx_iptv_sourceType ON iptv_list(sourceType);
+        CREATE INDEX IF NOT EXISTS idx_iptv_geoRegion ON iptv_list(geoRegion);
+        CREATE INDEX IF NOT EXISTS idx_iptv_geoOperator ON iptv_list(geoOperator);
     """)
     conn.commit()
     conn.close()
@@ -122,12 +127,7 @@ def init_db():
             createdAt TEXT DEFAULT (datetime('now')),
             updatedAt TEXT DEFAULT (datetime('now'))
         );
-
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            token TEXT UNIQUE NOT NULL,
-            expires_at TEXT NOT NULL
-        );
+        CREATE INDEX IF NOT EXISTS idx_scan_config_enabled ON scan_config(enabled);
 
         CREATE TABLE IF NOT EXISTS api_subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,6 +140,7 @@ def init_db():
             createdAt TEXT DEFAULT (datetime('now')),
             updatedAt TEXT DEFAULT (datetime('now'))
         );
+        CREATE INDEX IF NOT EXISTS idx_sub_enabled_cron ON api_subscriptions(enabled, fetchCron);
     """)
 
     # 初始化默认密码
@@ -150,9 +151,12 @@ def init_db():
     if not row:
         import hashlib
 
-        default_hash = hashlib.sha256(
-            os.getenv("UDPXY_SCANNER_PASSWORD", "admin").encode()
-        ).hexdigest()
+        default_hash = "pbkdf2$" + hashlib.pbkdf2_hmac(
+            "sha256",
+            os.getenv("UDPXY_SCANNER_PASSWORD", "admin").encode(),
+            b"udpxy-scanner-password-salt",
+            100000
+        ).hex()
 
         conn.execute(
             "INSERT INTO settings (key, value) VALUES ('password_hash', ?)",
