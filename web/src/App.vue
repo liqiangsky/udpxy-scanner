@@ -45,7 +45,7 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 const showTabbar = computed(() => {
-  return authStore.isLoggedIn && !route.meta?.hideNavbar
+  return authStore.isLoggedIn && !route.meta?.hideNavbar && route.path !== '/login'
 })
 
 const showLoginBtn = computed(() => {
