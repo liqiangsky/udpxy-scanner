@@ -28,6 +28,7 @@ def _get_persistent_conn(db_path: str) -> sqlite3.Connection:
                 conn.close()
             except Exception:
                 pass
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -42,6 +43,7 @@ def _get_persistent_conn(db_path: str) -> sqlite3.Connection:
 
 def init_cache_db():
     """初始化源缓存数据库（source_cache 表）"""
+    os.makedirs(os.path.dirname(CACHE_DB_PATH) or ".", exist_ok=True)
     conn = sqlite3.connect(CACHE_DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -63,6 +65,7 @@ def init_cache_db():
 
 def init_iptv_db():
     """初始化活源池数据库（iptv_list 表）"""
+    os.makedirs(os.path.dirname(IPTV_DB_PATH) or ".", exist_ok=True)
     conn = sqlite3.connect(IPTV_DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -99,6 +102,7 @@ def init_iptv_db():
 
 def init_db():
     """初始化主数据库（settings + scan_config + templates + sessions）"""
+    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
