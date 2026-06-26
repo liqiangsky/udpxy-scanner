@@ -5,7 +5,7 @@ import time
 from typing import Optional
 from datetime import datetime
 
-from db.database import get_iptv_db, get_setting, run_in_thread
+from db.database import get_iptv_db, get_cache_db, get_setting, run_in_thread
 
 logger = logging.getLogger("组播源")
 router = APIRouter()
@@ -200,12 +200,20 @@ async def api_test_delay(source_id: int):
 
 @router.delete("/iptv/{source_id}")
 def api_delete_iptv_source(source_id: int):
-    """删除单个组播源"""
+    """删除单个组播源。若host在iptv_list中已无其他条目，同步从source_cache清理"""
     with get_iptv_db() as conn:
         row = conn.execute("SELECT host FROM iptv_list WHERE id=?", (source_id,)).fetchone()
         if not row:
             return {"ok": False, "error": "源不存在"}
         host = row["host"]
         conn.execute("DELETE FROM iptv_list WHERE id=?", (source_id,))
-        logger.info(f"🗑️ [删除组播源] id={source_id}, host={host}")
+        # 检查该 host 是否还有剩余条目
+        remaining = conn.execute("SELECT COUNT(*) AS cnt FROM iptv_list WHERE host=?", (host,)).fetchone()["cnt"]
+        logger.info(f"🗑️ [删除组播源] id={source_id}, host={host}, 剩余条目={remaining}")
+
+    if remaining == 0:
+        with get_cache_db() as conn:
+            conn.execute("DELETE FROM source_cache WHERE host=?", (host,))
+            logger.info(f"🗑️ [同步清理] host={host} 已从 source_cache 中删除")
+
     return {"ok": True}
