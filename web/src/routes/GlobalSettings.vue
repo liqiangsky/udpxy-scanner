@@ -275,8 +275,8 @@ const handleChangePassword = async () => {
     setTimeout(() => {
       router.push('/login')
     }, 1500)
-  } catch (e) {
-    toast.error(e?.response?.data?.detail || '修改失败')
+  } catch {
+    /* 错误由拦截器统一提示 */
   } finally {
     changingPassword.value = false
   }
@@ -298,8 +298,8 @@ const handleScan = async () => {
   try {
     await request.post('/configs/run-all')
     toast.success('扫描任务已触发')
-  } catch (e) {
-    toast.error(e?.response?.data?.detail || '扫描触发失败')
+  } catch {
+    /* 错误由拦截器统一提示 */
   } finally {
     scanning.value = false
   }
@@ -312,8 +312,8 @@ const handleRecheck = async () => {
   try {
     await request.post('/cron/recheck')
     toast.success('复测任务已在后台启动')
-  } catch (e) {
-    toast.error(e?.response?.data?.detail || '复测失败')
+  } catch {
+    /* 错误由拦截器统一提示 */
   } finally {
     rechecking.value = false
   }
@@ -334,7 +334,6 @@ const handleSave = async () => {
     toast.success('设置已保存')
   } catch (e) {
     console.error('保存失败:', e)
-    toast.error('保存失败')
   } finally {
     saving.value = false
   }

@@ -187,8 +187,8 @@ const handleSaveSub = async () => {
     formVisible.value = false
     editingId.value = null
     await loadSubscriptions()
-  } catch (e) {
-    toast.error(e?.response?.data?.detail || '操作失败')
+  } catch {
+    /* 错误由拦截器统一提示 */
   }
 }
 
@@ -198,8 +198,8 @@ const handleDeleteSub = async (sub) => {
     await request.delete(`/subscriptions/${sub.id}`)
     toast.success('已删除')
     await loadSubscriptions()
-  } catch (e) {
-    toast.error(e?.response?.data?.detail || '删除失败')
+  } catch {
+    /* 错误由拦截器统一提示 */
   }
 }
 
@@ -212,7 +212,7 @@ const handleToggleEnabled = async (sub) => {
     })
     await loadSubscriptions()
   } catch {
-    toast.error('切换失败')
+    /* 错误由拦截器统一提示 */
   }
 }
 
@@ -222,8 +222,8 @@ const handleFetchSub = async (sub) => {
     await request.post(`/subscriptions/${sub.id}/fetch`)
     toast.success('拉取任务已在后台启动')
     await loadSubscriptions()
-  } catch (e) {
-    toast.error(e?.response?.data?.detail || '拉取失败')
+  } catch {
+    /* 错误由拦截器统一提示 */
   } finally {
     fetchingMap.value[sub.id] = false
   }

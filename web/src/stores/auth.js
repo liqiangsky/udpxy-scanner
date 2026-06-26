@@ -29,6 +29,7 @@ export const useAuthStore = defineStore('auth', () => {
         await request.post('/logout', { token })
       }
     } catch {
+      /* 忽略登出请求失败 */
     }
     clearSession()
   }

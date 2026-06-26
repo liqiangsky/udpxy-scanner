@@ -35,7 +35,7 @@ request.interceptors.response.use(
     }
     const msg = error.response?.data?.detail || error.message || '请求失败'
     toast.error(msg)
-    console.error('API 请求失败:', error)
+    console.error('API 请求失败:', msg, error)
     return Promise.reject(error)
   },
 )

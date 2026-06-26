@@ -302,8 +302,8 @@ const toggleScan = async (config) => {
       toast.success(scanConfigStore.progress.running ? '已加入队列' : '扫描任务已启动')
       scanConfigStore.startPolling()
     }
-  } catch (e) {
-    toast.error(e?.response?.data?.detail || '操作失败')
+  } catch {
+    /* 错误由拦截器统一提示 */
   }
 }
 
@@ -373,7 +373,6 @@ const handleSubmit = async () => {
     toast.success('保存成功')
   } catch (e) {
     console.error(e)
-    toast.error('保存失败')
   }
 }
 
@@ -385,7 +384,7 @@ const handleDelete = async (id) => {
     toast.success('已删除')
     await scanConfigStore.refresh()
   } catch {
-    toast.error('删除失败')
+    /* 错误由拦截器统一提示 */
   }
 }
 
@@ -409,7 +408,7 @@ const handleToggleEnable = async (config) => {
     toast.success(newEnabled ? '已启用' : '已禁用')
     await scanConfigStore.refresh()
   } catch {
-    toast.error('操作失败')
+    /* 错误由拦截器统一提示 */
   }
 }
 

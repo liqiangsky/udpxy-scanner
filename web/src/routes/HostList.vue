@@ -221,7 +221,6 @@ const handleTestDelay = async (item) => {
     }
   } catch {
     item.delay = -1
-    toast.error('测试失败')
   }
 }
 
@@ -243,7 +242,7 @@ const handleDelete = async (item) => {
       toast.error(res.error || '删除失败')
     }
   } catch {
-    toast.error('删除失败')
+    /* 错误由拦截器统一提示 */
   }
 }
 

@@ -55,7 +55,6 @@ const handleLogin = async () => {
     router.replace(redirect)
   } catch (e) {
     errorMsg.value = e?.response?.data?.detail || '登录失败，请检查密码'
-    toast.error(errorMsg.value)
   } finally {
     submitting.value = false
   }
