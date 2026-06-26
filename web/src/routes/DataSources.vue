@@ -205,12 +205,10 @@ const handleDeleteSub = async (sub) => {
 
 const handleToggleEnabled = async (sub) => {
   try {
+    const { name, uid, url, fetchCron = '' } = sub
     await request.put(`/subscriptions/${sub.id}`, {
-      name: sub.name,
-      uid: sub.uid,
-      url: sub.url,
+      name, uid, url, fetchCron,
       enabled: !sub.enabled,
-      fetchCron: sub.fetchCron || '',
     })
     await loadSubscriptions()
   } catch {

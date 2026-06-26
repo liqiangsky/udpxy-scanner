@@ -298,16 +298,8 @@ const toggleScan = async (config) => {
       toast.info('已停止扫描')
     } else {
       await request.post(`/configs/${config.id}/run`)
-      const p = scanConfigStore.progress
-      if (p.running) {
-        p.queuedIds.push(config.id)
-        toast.success('已加入队列')
-      } else {
-        p.running = true
-        p.currentId = config.id
-        p.queuedIds = []
-        toast.success('扫描任务已启动')
-      }
+      scanConfigStore.addToQueue(config.id)
+      toast.success(scanConfigStore.progress.running ? '已加入队列' : '扫描任务已启动')
       scanConfigStore.startPolling()
     }
   } catch (e) {
@@ -404,13 +396,14 @@ const handleToggleEnable = async (config) => {
   }
   const newEnabled = !config.enabled
   try {
+    const { name, templateRegion, templateOperator, templateTargetName, templateTargetAddress, dataSource = '' } = config
     await request.put(`/configs/${config.id}`, {
-      name: config.name,
-      region: config.templateRegion || '',
-      operator: config.templateOperator || '',
-      targetName: config.templateTargetName || '',
-      targetAddress: config.templateTargetAddress || '',
-      dataSource: config.dataSource || '',
+      name,
+      region: templateRegion || '',
+      operator: templateOperator || '',
+      targetName: templateTargetName || '',
+      targetAddress: templateTargetAddress || '',
+      dataSource,
       enabled: newEnabled,
     })
     toast.success(newEnabled ? '已启用' : '已禁用')

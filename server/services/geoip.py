@@ -88,14 +88,14 @@ def _query_ip2region(ip: str) -> dict:
 
     searcher = _get_searcher()
     if not searcher:
-        return {"region": "", "operator": "", "countryCode": ""}
+        return {"region": "", "operator": "", "countryCode": "", "is_foreign": True}
     try:
         region_str = searcher.search(ip)
         if not region_str:
-            return {"region": "", "operator": "", "countryCode": ""}
+            return {"region": "", "operator": "", "countryCode": "", "is_foreign": True}
         parts = region_str.split("|")
         if len(parts) < 5:
-            return {"region": "", "operator": "", "countryCode": ""}
+            return {"region": "", "operator": "", "countryCode": "", "is_foreign": True}
         country = parts[0]
         province_raw = parts[1]
         isp = parts[3]
@@ -112,10 +112,10 @@ def _query_ip2region(ip: str) -> dict:
         return {"region": region, "operator": operator, "countryCode": code}
     except ValueError as e:
         logger.debug(f"🌍 [ip2region] {ip} 查询失败(非IPv4?): {e}")
-        return {"region": "", "operator": "", "countryCode": ""}
+        return {"region": "", "operator": "", "countryCode": "", "is_foreign": True}
     except Exception as e:
         logger.debug(f"🌍 [ip2region] {ip} 查询异常: {e}")
-        return {"region": "", "operator": "", "countryCode": ""}
+        return {"region": "", "operator": "", "countryCode": "", "is_foreign": True}
 
 
 async def _health_check_batch(session: aiohttp.ClientSession, hosts: list[dict], concurrency: int = 64) -> list[dict]:

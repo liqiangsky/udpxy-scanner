@@ -59,13 +59,13 @@
         </div>
         <div
           v-else
-          v-for="(line, i) in filteredLogs"
+          v-for="(parsed, i) in parsedLogs"
           :key="i"
           class="log-line"
-          :class="getLogLevelClass(line)"
+          :class="getLogLevelClass(parsed.display)"
         >
-          <span class="log-time">{{ parseLogLine(line).time }}</span>
-          <span class="log-text">{{ parseLogLine(line).display }}</span>
+          <span class="log-time">{{ parsed.time }}</span>
+          <span class="log-text">{{ parsed.display }}</span>
         </div>
       </div>
     </div>
@@ -106,11 +106,15 @@ const parseLogLine = (line) => {
 
 const modules = computed(() => {
   const set = new Set()
-  for (const line of logs.value) {
-    const parsed = parseLogLine(line)
+  for (const parsed of parsedLogs.value) {
     if (parsed.module) set.add(parsed.module)
   }
   return [...set].sort()
+})
+
+// 预解析日志缓存，避免模板和 computed 中重复解析
+const parsedLogs = computed(() => {
+  return filteredLogs.value.map((line) => parseLogLine(line))
 })
 
 const filteredLogs = computed(() => {
@@ -170,10 +174,10 @@ const refreshLogs = async () => {
   refreshing.value = false
 }
 
-const getLogLevelClass = (line) => {
-  if (line.includes('[ERROR]') || line.includes('[EXCEPTION]') || line.includes('[CRITICAL]'))
+const getLogLevelClass = (display) => {
+  if (display.includes('[ERROR]') || display.includes('[EXCEPTION]') || display.includes('[CRITICAL]'))
     return 'log-error'
-  if (line.includes('[WARNING]')) return 'log-warning'
+  if (display.includes('[WARNING]')) return 'log-warning'
   return ''
 }
 
@@ -186,10 +190,27 @@ watch(logLevel, () => {
 onMounted(() => {
   fetchLogs()
   pollTimer = setInterval(fetchLogs, 3000)
+  // 页面在后台时暂停轮询，节省网络和计算资源
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
+
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+  } else {
+    if (!pollTimer) {
+      fetchLogs()
+      pollTimer = setInterval(fetchLogs, 3000)
+    }
+  }
+}
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 

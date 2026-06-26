@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { toast } from '@/components/Toast'
 import { useAuthStore } from '@/stores/auth'
+import router from '@/router'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -23,12 +24,12 @@ request.interceptors.response.use(
     const status = error.response?.status
     if (status === 401) {
       const authStore = useAuthStore()
-      authStore._doLogout()
+      authStore.clearSession()
       toast.error('登录已过期，请重新登录')
       const currentPath = window.location.pathname
       const redirect = currentPath !== '/login' ? currentPath : ''
       setTimeout(() => {
-        window.location.href = redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'
+        router.push(redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login')
       }, 1500)
       return Promise.reject(error)
     }

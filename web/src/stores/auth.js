@@ -10,7 +10,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn.value = true
   }
 
-  const _doLogout = () => {
+  const clearSession = () => {
     isLoggedIn.value = false
     localStorage.removeItem('auth_token')
   }
@@ -30,8 +30,8 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch {
     }
-    _doLogout()
+    clearSession()
   }
 
-  return { isLoggedIn, _doLogout, login, logout }
+  return { isLoggedIn, clearSession, login, logout }
 })

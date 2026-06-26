@@ -115,7 +115,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.post("/change-password")
-def api_change_password(req: ChangePasswordRequest):
+def api_change_password(request: Request, req: ChangePasswordRequest):
     stored_hash = get_setting("password_hash", "")
     if not _verify_password(req.oldPassword, stored_hash):
         raise HTTPException(400, "旧密码错误")
@@ -124,6 +124,8 @@ def api_change_password(req: ChangePasswordRequest):
     new_hash = "pbkdf2$" + hash_password(req.newPassword)
     with get_db() as conn:
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('password_hash', ?)", (new_hash,))
-    # 清除所有已有 session，强制重新登录
-    _sessions.clear()
+    # 只清除当前用户的 session，其他用户不受影响
+    auth_token = request.headers.get("X-Auth-Token", "")
+    if auth_token in _sessions:
+        del _sessions[auth_token]
     return {"ok": True, "msg": "密码已修改，请重新登录"}

@@ -46,15 +46,13 @@ const router = createRouter({
   routes,
 })
 
-// 路由守卫：未登录时跳转到登录页（/hosts 除外）
+// 路由守卫：未登录时跳转到登录页（仅 meta.public 的路由可匿名访问）
 router.beforeEach((to) => {
   if (to.meta.public) return true
 
   const token = localStorage.getItem('auth_token')
-  if (!token && to.meta.requiresAuth !== false) {
-    if (to.path !== '/hosts') {
-      return { path: '/login', query: { redirect: to.fullPath } }
-    }
+  if (!token) {
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
   return true
 })

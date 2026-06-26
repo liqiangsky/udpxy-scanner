@@ -107,7 +107,8 @@ def api_stop_single_config(config_id: int):
 
     # 当前正在执行的配置：中断并跳到下一个
     current_id = task_runner.get_current_config_id()
-    logger.info(f"🛑 [停止请求] cfg_id={config_id}, current_id={current_id}, queue={task_runner._config_ids}")
+    queue = task_runner.get_config_ids()
+    logger.info(f"🛑 [停止请求] cfg_id={config_id}, current_id={current_id}, queue={queue}")
 
     if current_id == config_id:
         task_runner.stop_current_and_continue()
@@ -116,7 +117,8 @@ def api_stop_single_config(config_id: int):
 
     # 排队中的配置：从队列移除（不包括已完成和正在执行的）
     if task_runner.remove_from_queue(config_id):
-        logger.info(f"🛑 [移除排队] cfg_id={config_id}，新队列={task_runner._config_ids}")
+        queue = task_runner.get_config_ids()
+        logger.info(f"🛑 [移除排队] cfg_id={config_id}，新队列={queue}")
         return {"ok": True, "msg": "已从队列移除"}
 
     logger.warning(f"⚠️ [停止失败] cfg_id={config_id} 不在队列中（可能已完成或正在执行）")

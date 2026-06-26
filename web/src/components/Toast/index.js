@@ -1,11 +1,12 @@
 import { createVNode, render } from 'vue'
 import ToastComponent from './Index.vue'
 
-// 动态创建根级 DOM 挂载支架
+// 模块级单例：Toast 挂载在 document.body 下，与 Vue 组件树独立。
+// 优点是调用方无需在 template 中声明组件即可使用。
+// 缺点是不共享 App 的 provide/inject——当前场景下无此需求，可接受。
 const div = document.createElement('div')
 document.body.appendChild(div)
 
-// 实例化组件
 const vnode = createVNode(ToastComponent)
 render(vnode, div)
 

@@ -34,8 +34,7 @@ def _fetch_enabled_subscriptions():
 
 
 def _batch_insert_iptv(batch_rows: list):
-    _db_write_lock.acquire()
-    try:
+    with _db_write_lock:
         with get_iptv_db() as conn:
             conn.executemany("""
                 INSERT INTO iptv_list (
@@ -56,8 +55,6 @@ def _batch_insert_iptv(batch_rows: list):
                     geoRegion = ?,
                     geoOperator = ?
             """, batch_rows)
-    finally:
-        _db_write_lock.release()
 
 
 async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False):
@@ -373,7 +370,6 @@ def enqueue_background_queue(config_id: int):
         logger.info(f"⚠️ [加入队列失败] cfg_id={config_id} 已在剩余队列中")
         return False
 
-    task_runner._config_ids.append(config_id)
-    task_runner._total = len(task_runner._config_ids)
-    logger.info(f"📋 [加入队列] cfg_id={config_id}, 新队列={task_runner._config_ids}")
+    task_runner.append_to_queue(config_id)
+    logger.info(f"📋 [加入队列] cfg_id={config_id}, 新队列={task_runner.get_config_ids()}")
     return True

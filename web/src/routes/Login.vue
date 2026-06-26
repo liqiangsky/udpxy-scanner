@@ -54,7 +54,7 @@ const handleLogin = async () => {
     const redirect = route.query.redirect || '/'
     router.replace(redirect)
   } catch (e) {
-    errorMsg.value = e?.response?.data?.detail || '登录失败，请检查用户名和密码'
+    errorMsg.value = e?.response?.data?.detail || '登录失败，请检查密码'
     toast.error(errorMsg.value)
   } finally {
     submitting.value = false

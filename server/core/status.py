@@ -114,6 +114,17 @@ class TaskRunnerStatus:
         with self._lock:
             return list(self._config_ids[self._current_index:])
 
+    def append_to_queue(self, config_id: int):
+        """追加配置到队列尾部（线程安全）"""
+        with self._lock:
+            self._config_ids.append(config_id)
+            self._total = len(self._config_ids)
+
+    def get_config_ids(self) -> list:
+        """获取当前队列快照（线程安全）"""
+        with self._lock:
+            return list(self._config_ids)
+
     def is_idle(self) -> bool:
         with self._lock:
             return not self._running and not self._rechecking

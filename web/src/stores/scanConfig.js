@@ -14,7 +14,6 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
   let pollTimer = null
 
   const fetch = async () => {
-    if (loaded.value) return configs.value
     configs.value = await request.get('/configs')
     loaded.value = true
     return configs.value
@@ -54,6 +53,28 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
     loaded.value = true
   }
 
+  /**
+   * 原子化更新 progress：将配置加入扫描队列
+   * 避免组件层直接修改 progress 导致竞态条件
+   */
+  const addToQueue = (configId) => {
+    if (progress.value.running) {
+      progress.value.queuedIds.push(configId)
+    } else {
+      progress.value.running = true
+      progress.value.currentId = configId
+      progress.value.queuedIds = []
+    }
+  }
+
+  const removeFromQueue = (configId) => {
+    progress.value.queuedIds = progress.value.queuedIds.filter((id) => id !== configId)
+    if (progress.value.currentId === configId) {
+      progress.value.currentId = null
+      progress.value.running = false
+    }
+  }
+
   return {
     configs,
     loaded,
@@ -63,5 +84,7 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
     startPolling,
     stopPolling,
     refresh,
+    addToQueue,
+    removeFromQueue,
   }
 })

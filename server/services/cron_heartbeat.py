@@ -4,6 +4,7 @@ Cron 任务检查服务。
 需要外部定时调用 /api/cron/heartbeat 触发（如宿主机 crontab 每分钟 curl）。
 """
 import datetime
+import time
 import asyncio
 import aiohttp
 import logging
@@ -92,7 +93,7 @@ async def execute_recheck() -> int:
             failed_list = []
             success_items = []
             _result_lock = asyncio.Lock()
-            now_ms = int(__import__("time").time() * 1000)
+            now_ms = int(time.time() * 1000)
 
             async def recheck_worker(source):
                 async with concurrency_sem:
@@ -132,7 +133,7 @@ async def execute_recheck() -> int:
                 second_success = []
                 second_failed_ids = []
                 second_failed_hosts = []
-                now2_ms = int(__import__("time").time() * 1000)
+                now2_ms = int(time.time() * 1000)
 
                 async def second_recheck(source):
                     async with concurrency_sem:

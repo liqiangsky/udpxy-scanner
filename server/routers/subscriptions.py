@@ -102,6 +102,7 @@ def api_fetch_subscription(sub_id: int):
                     (datetime.now().isoformat(), sub_info["id"])
                 )
             logger.info(f"✅ 订阅 {sub_info['name']} 拉取完成")
+        # Python 3.10+ 中 asyncio.run() 可安全地从非主线程调用（自动创建新事件循环）
         asyncio.run(_do())
 
     threading.Thread(target=run_fetch, daemon=True).start()

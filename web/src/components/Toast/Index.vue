@@ -13,12 +13,13 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 
 defineOptions({ name: 'ToastContainer' })
 
 const items = ref([])
 let idCounter = 0
+const timers = new Set()
 
 const icons = {
   success: 'check_circle',
@@ -32,13 +33,25 @@ const add = (message, type = 'info', duration = 3500) => {
   items.value.push({ id, message, type })
 
   if (duration > 0) {
-    setTimeout(() => remove(id), duration)
+    const timer = setTimeout(() => {
+      timers.delete(timer)
+      remove(id)
+    }, duration)
+    timers.add(timer)
   }
 }
 
 const remove = (id) => {
   items.value = items.value.filter((item) => item.id !== id)
 }
+
+// 组件卸载时清理所有残留 timer
+onUnmounted(() => {
+  for (const timer of timers) {
+    clearTimeout(timer)
+  }
+  timers.clear()
+})
 
 defineExpose({ add })
 </script>

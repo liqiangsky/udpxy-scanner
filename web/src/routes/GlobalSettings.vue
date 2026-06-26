@@ -224,10 +224,12 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { toast } from '@/components/Toast'
 import { useSettingsStore } from '@/stores/settings'
 import request from '@/api'
 
+const router = useRouter()
 const settingsStore = useSettingsStore()
 
 // ===== 设置 =====
@@ -271,7 +273,7 @@ const handleChangePassword = async () => {
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
     setTimeout(() => {
-      window.location.href = '/login'
+      router.push('/login')
     }, 1500)
   } catch (e) {
     toast.error(e?.response?.data?.detail || '修改失败')
@@ -282,10 +284,9 @@ const handleChangePassword = async () => {
 
 const generateApiKey = () => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  const key = Array.from(
-    { length: 32 },
-    () => chars[Math.floor(Math.random() * chars.length)],
-  ).join('')
+  const array = new Uint8Array(32)
+  crypto.getRandomValues(array)
+  const key = Array.from(array, (b) => chars[b % chars.length]).join('')
   settings.pushApiKey = key
   toast.success('已生成新 API Key，记得保存')
 }

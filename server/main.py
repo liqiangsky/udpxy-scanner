@@ -33,11 +33,10 @@ async def system_lifespan(app: FastAPI):
 
 app = FastAPI(title="udpxy-scanner", lifespan=system_lifespan)
 
-# 跨域设置
+# 跨域设置（使用 X-Auth-Token 认证，无需 allow_credentials）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
