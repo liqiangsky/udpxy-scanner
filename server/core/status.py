@@ -129,6 +129,10 @@ class TaskRunnerStatus:
         with self._lock:
             return not self._running and not self._rechecking
 
+    def is_rechecking(self) -> bool:
+        with self._lock:
+            return self._rechecking
+
     def finish(self):
         """当前队列执行结束，清理状态"""
         with self._lock:

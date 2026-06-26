@@ -92,6 +92,8 @@ def api_trigger_single_config(config_id: int):
             raise HTTPException(404, "配置不存在")
         if row["enabled"] != 1:
             raise HTTPException(400, "该配置已禁用")
+    if task_runner.is_rechecking():
+        raise HTTPException(400, "当前正在进行活源复测，请稍后再启动扫描")
     if task_runner.is_idle():
         logger.info(f"▶️ [手动运行] 空闲状态，启动新队列 cfg_id={config_id}")
         trigger_background_queue([config_id])
@@ -126,6 +128,8 @@ def api_stop_single_config(config_id: int):
 
 @router.post("/configs/run-all")
 def api_trigger_run_all():
+    if task_runner.is_rechecking():
+        raise HTTPException(400, "当前正在进行活源复测，请稍后再启动扫描")
     if task_runner.is_idle():
         with get_db() as conn: rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
         if not rows: raise HTTPException(400, "无可用激活配置")
