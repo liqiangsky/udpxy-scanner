@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <button class="back-btn" @click="$router.back()">
-        <span class="material-symbols-outlined">chevron_left</span>
+        <span class="material-symbols-outlined">arrow_back</span>
       </button>
       <h1 class="page-title">参数管理</h1>
       <button class="header-icon-btn" @click="handleSave" :class="{ fetching: saving }">

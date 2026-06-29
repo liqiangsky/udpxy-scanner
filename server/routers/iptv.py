@@ -201,19 +201,45 @@ async def api_test_delay(source_id: int):
 @router.delete("/iptv/{source_id}")
 def api_delete_iptv_source(source_id: int):
     """删除单个组播源。若host在iptv_list中已无其他条目，同步从source_cache清理"""
+    ok, err = _do_delete_iptv(source_id)
+    if not ok:
+        return {"ok": False, "error": err}
+    return {"ok": True}
+
+
+def _do_delete_iptv(source_id: int) -> tuple[bool, str]:
+    """执行删除，返回 (成功?, 错误信息)"""
     with get_iptv_db() as conn:
         row = conn.execute("SELECT host FROM iptv_list WHERE id=?", (source_id,)).fetchone()
         if not row:
-            return {"ok": False, "error": "源不存在"}
+            return False, "源不存在"
         host = row["host"]
         conn.execute("DELETE FROM iptv_list WHERE id=?", (source_id,))
-        # 检查该 host 是否还有剩余条目
         remaining = conn.execute("SELECT COUNT(*) AS cnt FROM iptv_list WHERE host=?", (host,)).fetchone()["cnt"]
-        logger.info(f"🗑️ [删除组播源] id={source_id}, host={host}, 剩余条目={remaining}")
 
     if remaining == 0:
         with get_cache_db() as conn:
             conn.execute("DELETE FROM source_cache WHERE host=?", (host,))
             logger.info(f"🗑️ [同步清理] host={host} 已从 source_cache 中删除")
 
-    return {"ok": True}
+    logger.info(f"🗑️ [删除组播源] id={source_id}, host={host}, 剩余条目={remaining}")
+    return True, ""
+
+
+@router.post("/iptv/batch-delete")
+def api_batch_delete_iptv(data: dict):
+    """批量删除组播源。"""
+    ids = data.get("ids", [])
+    if not ids:
+        return {"ok": False, "error": "ids 不能为空"}
+
+    success = []
+    failed = []
+    for sid in ids:
+        ok, err = _do_delete_iptv(sid)
+        if ok:
+            success.append(sid)
+        else:
+            failed.append({"id": sid, "error": err})
+
+    return {"ok": True, "success": success, "failed": failed}

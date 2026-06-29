@@ -1,5 +1,14 @@
 <template>
-  <div v-if="item" class="iptv-grid-card">
+  <div
+    v-if="item"
+    class="iptv-grid-card"
+    :class="{ 'card-selected': selected }"
+    @pointerdown="onPointerDown"
+    @pointerup="onPointerUp"
+    @pointerleave="onPointerUp"
+    @contextmenu.prevent
+    @click="onCardClick"
+  >
     <div class="section-host">
       <div class="host-ip font-mono">{{ item.host }}</div>
       <div class="host-actions">
@@ -64,7 +73,11 @@
 </template>
 
 <script setup>
-defineProps({
+const LONG_PRESS_MS = 500
+let pressTimer = null
+let longPressed = false
+
+const props = defineProps({
   item: {
     type: Object,
     default: null,
@@ -73,8 +86,42 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  selected: {
+    type: Boolean,
+    default: false,
+  },
+  selectMode: {
+    type: Boolean,
+    default: false,
+  },
 })
-defineEmits(['copy', 'test', 'delete'])
+const emit = defineEmits(['copy', 'test', 'delete', 'toggle-select', 'longpress'])
+
+const onPointerDown = (e) => {
+  if (e.button !== 0) return
+  longPressed = false
+  pressTimer = setTimeout(() => {
+    longPressed = true
+    emit('longpress')
+  }, LONG_PRESS_MS)
+}
+const onPointerUp = () => {
+  if (pressTimer) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}
+const onCardClick = () => {
+  // 长按触发后抬起手指会带一次 click，跳过它
+  if (longPressed) {
+    longPressed = false
+    return
+  }
+  // 选择模式下点击卡片切换选中
+  if (props.selectMode) {
+    emit('toggle-select', props.item)
+  }
+}
 </script>
 
 <style scoped>
@@ -87,6 +134,11 @@ defineEmits(['copy', 'test', 'delete'])
   display: flex;
   flex-direction: column;
   gap: 12px;
+  transition: border-color 0.2s ease;
+}
+.iptv-grid-card.card-selected {
+  border-color: var(--color-blue);
+  box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.15), var(--shadow-md);
 }
 
 .section-host {

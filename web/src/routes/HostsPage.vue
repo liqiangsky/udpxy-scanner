@@ -38,9 +38,13 @@
           :key="source.id"
           :item="source"
           :is-authenticated="authStore.isLoggedIn"
+          :selected="selection.has(source.id)"
+          :select-mode="selectMode"
           @copy="handleCopy"
           @test="handleTestDelay"
           @delete="handleDelete"
+          @toggle-select="toggleSelect"
+          @longpress="handleLongPress(source)"
         />
 
         <div v-if="displayList.length < filteredList.length" class="load-more-wrap">
@@ -61,6 +65,28 @@
         <p>暂无符合当前筛选条件的组播源</p>
       </div>
     </div>
+
+    <!-- 批量操作栏（替换底部 tabbar） -->
+    <Transition name="batch-bar">
+      <div v-if="selectMode" class="batch-tabbar">
+        <button class="batch-tab-item" @click="selectAll">
+          <span class="material-symbols-outlined batch-tab-icon">
+            {{ displayList.length > 0 && displayList.every(s => selection.has(s.id)) ? 'deselect' : 'select_all' }}
+          </span>
+          <span class="batch-tab-text">全选</span>
+        </button>
+        <div class="batch-tab-divider"></div>
+        <button class="batch-tab-item" :class="{ disabled: selection.size === 0 }" :disabled="selection.size === 0" @click="handleBatchDelete">
+          <span class="material-symbols-outlined batch-tab-icon delete-color">delete</span>
+          <span class="batch-tab-text delete-color">删除</span>
+        </button>
+        <div class="batch-tab-divider"></div>
+        <button class="batch-tab-item" @click="exitSelectMode">
+          <span class="material-symbols-outlined batch-tab-icon cancel-color">close</span>
+          <span class="batch-tab-text cancel-color">取消</span>
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -71,6 +97,7 @@ import IptvHostCard from '@/components/HostCard.vue'
 import { regions, operators } from '@/data.js'
 import { toast } from '@/components/Toast'
 import { useAuthStore } from '@/stores/auth'
+import { batchSelectActive } from '@/shared'
 
 const authStore = useAuthStore()
 
@@ -85,6 +112,66 @@ const loading = ref(false)
 // 分页渲染控制
 const PAGE_SIZE = 20
 const displayCount = ref(PAGE_SIZE)
+
+// 批量选择
+const selectMode = ref(false)
+const selection = reactive(new Set())
+
+const enterSelectMode = (item) => {
+  selectMode.value = true
+  batchSelectActive.value = true
+  if (item) selection.add(item.id)
+}
+const exitSelectMode = () => {
+  selectMode.value = false
+  batchSelectActive.value = false
+  selection.clear()
+}
+const toggleSelect = (item) => {
+  if (selection.has(item.id)) {
+    selection.delete(item.id)
+  } else {
+    selection.add(item.id)
+  }
+}
+const selectAll = () => {
+  const allIds = displayList.value.map((s) => s.id)
+  const allSelected = allIds.length > 0 && allIds.every((id) => selection.has(id))
+  if (allSelected) {
+    allIds.forEach((id) => selection.delete(id))
+  } else {
+    allIds.forEach((id) => selection.add(id))
+  }
+}
+const handleLongPress = (item) => {
+  if (!authStore.isLoggedIn) return
+  enterSelectMode(item)
+}
+const handleBatchDelete = async () => {
+  if (selection.size === 0) return
+  const confirmed = confirm(`确定要删除选中的 ${selection.size} 个组播源吗？\n\n此操作不可恢复。`)
+  if (!confirmed) return
+
+  const ids = [...selection]
+  try {
+    const res = await request.post('/iptv/batch-delete', { ids })
+    if (res.ok) {
+      const deletedCount = res.success?.length || 0
+      if (deletedCount > 0) {
+        toast.success(`成功删除 ${deletedCount} 个组播源`)
+        rawIptvList.value = rawIptvList.value.filter((i) => !ids.includes(i.id))
+      }
+      if (res.failed?.length > 0) {
+        toast.warning(`${res.failed.length} 个删除失败`)
+      }
+    } else {
+      toast.error(res.error || '批量删除失败')
+    }
+  } catch {
+    /* 错误由拦截器统一提示 */
+  }
+  exitSelectMode()
+}
 
 // 地区与运营商动态字典
 const regionMap = reactive({})
@@ -189,11 +276,12 @@ const loadMore = () => {
   displayCount.value = Math.min(displayCount.value + PAGE_SIZE, filteredList.value.length)
 }
 
-// 筛选变化时重置分页
+// 筛选变化时重置分页并退出选择模式
 watch(
   () => ({ region: filterForm.region, operator: filterForm.operator }),
   () => {
     displayCount.value = PAGE_SIZE
+    exitSelectMode()
   },
 )
 
@@ -238,6 +326,8 @@ const handleDelete = async (item) => {
       toast.success('删除成功')
       // 从列表中移除
       rawIptvList.value = rawIptvList.value.filter((i) => i.id !== item.id)
+      // 同步清理选择集
+      selection.delete(item.id)
     } else {
       toast.error(res.error || '删除失败')
     }
@@ -382,6 +472,85 @@ onMounted(() => {
 .card-fade-leave-to {
   opacity: 0;
   transform: scale(0.92) translateY(10px);
+}
+
+/* 批量操作 tabbar */
+.batch-tabbar {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  min-width: 240px;
+  height: 52px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(40px) saturate(180%);
+  border-radius: 20px;
+  box-shadow: var(--shadow-tabbar);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 99;
+  margin-bottom: env(safe-area-inset-bottom);
+}
+.batch-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s ease;
+}
+.batch-tab-item:active {
+  transform: scale(0.92);
+}
+.batch-tab-item.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.batch-tab-icon {
+  font-size: 22px !important;
+  color: var(--color-blue);
+  font-variation-settings: 'FILL' 0, 'wght' 400;
+}
+.batch-tab-icon.delete-color {
+  color: var(--color-red);
+}
+.batch-tab-icon.cancel-color {
+  color: var(--text-muted);
+}
+.batch-tab-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-blue);
+  font-family: var(--font-sans);
+}
+.batch-tab-text.delete-color {
+  color: var(--color-red);
+}
+.batch-tab-text.cancel-color {
+  color: var(--text-muted);
+}
+.batch-tab-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.batch-bar-enter-active,
+.batch-bar-leave-active {
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.batch-bar-enter-from,
+.batch-bar-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
 }
 
 /* 加载更多 */

@@ -34,12 +34,13 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { batchSelectActive } from '@/shared'
 
 const route = useRoute()
 const authStore = useAuthStore()
 
 const showTabbar = computed(() => {
-  return authStore.isLoggedIn && !route.meta?.hideNavbar && route.path !== '/login'
+  return authStore.isLoggedIn && !route.meta?.hideNavbar && route.path !== '/login' && !batchSelectActive.value
 })
 
 const showLoginBtn = computed(() => {

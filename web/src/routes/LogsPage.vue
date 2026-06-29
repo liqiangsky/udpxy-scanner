@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <button class="back-btn" @click="$router.back()">
-        <span class="material-symbols-outlined">chevron_left</span>
+        <span class="material-symbols-outlined">arrow_back</span>
       </button>
       <h1 class="page-title">后台日志</h1>
       <button class="refresh-btn" @click="refreshLogs" :class="{ fetching: refreshing }">
