@@ -10,11 +10,11 @@
         <div class="form-item">
           <label>密码</label>
           <input
+            ref="passwordInputRef"
             v-model="form.password"
             type="password"
             placeholder="请输入密码"
             required
-            autofocus
             autocomplete="current-password"
           />
         </div>
@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/components/Toast'
@@ -41,9 +41,14 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
+const passwordInputRef = ref(null)
 const form = reactive({ password: '' })
 const submitting = ref(false)
 const errorMsg = ref('')
+
+onMounted(() => {
+  passwordInputRef.value?.focus()
+})
 
 const handleLogin = async () => {
   submitting.value = true

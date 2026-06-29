@@ -42,7 +42,7 @@
 
   /* 阴影 */
   --shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.015);
-  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.06);
   --shadow-tabbar: 0 8px 32px rgba(0, 0, 0, 0.06);
 
   /* 动效 */

@@ -1,9 +1,9 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">扫描配置</h1>
+      <h1 class="page-title">扫描</h1>
       <button class="action-btn primary-btn" @click="openForm()">
-        <span class="material-symbols-outlined icon-g-btn">add</span> 新增配置
+        <span class="material-symbols-outlined icon-g-btn">add</span>
       </button>
     </div>
 
@@ -84,7 +84,7 @@
 
           <div class="card-grid">
             <div class="grid-item full-width">
-              <span class="lbl">数据源</span>
+              <span class="lbl">订阅源</span>
               <span class="txt color-blue">{{ dataSourceLabel(config.dataSource) }}</span>
             </div>
             <div class="grid-item">
@@ -113,10 +113,17 @@
               :class="{ disabled: !config.enabled }"
               @click="handleToggleEnable(config)"
             >
+              <span class="material-symbols-outlined icon-g-btn">{{
+                config.enabled ? 'toggle_on' : 'toggle_off'
+              }}</span>
               {{ config.enabled ? '禁用' : '启用' }}
             </button>
-            <button class="text-btn edit" @click="openForm(config)">编辑</button>
-            <button class="text-btn delete" @click="handleDelete(config.id)">删除</button>
+            <button class="text-btn edit" @click="openForm(config)">
+              <span class="material-symbols-outlined icon-g-btn">edit</span> 编辑
+            </button>
+            <button class="text-btn delete" @click="handleDelete(config.id)">
+              <span class="material-symbols-outlined icon-g-btn">delete</span> 删除
+            </button>
           </div>
         </div>
       </TransitionGroup>
@@ -140,7 +147,7 @@
           </div>
 
           <div class="form-item">
-            <label>数据源</label>
+            <label>订阅源</label>
             <div class="source-selector">
               <label
                 class="source-tag all-tag"
@@ -168,7 +175,7 @@
                 {{ ds.label }}
               </label>
             </div>
-            <p class="field-hint">不选表示扫描全部启用的数据源</p>
+            <p class="field-hint">不选表示扫描全部启用的订阅源</p>
           </div>
 
           <div class="form-row-2col">
@@ -234,7 +241,7 @@ const activeIds = computed(() => {
   return ids
 })
 
-// 数据源标签
+// 订阅源标签
 const dataSourceLabel = (ds) => {
   if (!ds) return '全部'
   const found = enabledDataSources.value.find((s) => s.value === ds)
@@ -251,7 +258,7 @@ const toggleAllSources = () => {
   formData.dataSources = []
 }
 
-// 数据源列表（从 API 查询订阅列表）
+// 订阅源列表（从 API 查询订阅列表）
 const enabledDataSources = ref([])
 
 const loadDataSources = async () => {
@@ -433,6 +440,7 @@ onUnmounted(() => {
   background: rgba(245, 245, 247, 0.92);
   backdrop-filter: blur(20px);
   padding: 12px 16px;
+  min-height: 56px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -471,8 +479,8 @@ onUnmounted(() => {
 .primary-btn {
   background: var(--color-blue);
   color: #ffffff;
-  padding: 8px 14px;
-  border-radius: var(--radius-btn);
+  padding: 8px;
+  border-radius: 50%;
   font-size: 13.5px;
   display: inline-flex;
   align-items: center;
@@ -497,7 +505,7 @@ onUnmounted(() => {
   gap: 16px;
   width: 100%;
   max-width: var(--max-content);
-  padding-bottom: 90px;
+  padding-bottom: 70px;
 }
 
 @media (min-width: 768px) {
@@ -582,6 +590,7 @@ onUnmounted(() => {
   gap: 4px;
   padding: 3px 8px;
   border-radius: 10px;
+  width: max-content;
 }
 .status-dot-badge::before {
   content: '';
@@ -715,6 +724,9 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   -webkit-tap-highlight-color: transparent;
 }
 .text-btn.edit {
@@ -917,7 +929,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
-  padding-bottom: 90px;
+  padding-bottom: 70px;
 }
 .skeleton-card {
   background: var(--bg-card);

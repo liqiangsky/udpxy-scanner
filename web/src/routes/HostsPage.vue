@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">组播源</h1>
+      <h1 class="page-title">主机</h1>
       <div class="header-right">
         <div class="filter-counter-top">
           <span>{{ filteredList.length }}</span> 个可用
@@ -262,6 +262,7 @@ onMounted(() => {
   background: rgba(245, 245, 247, 0.92);
   backdrop-filter: blur(20px);
   padding: 12px 16px;
+  min-height: 58px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -346,7 +347,7 @@ onMounted(() => {
 
 /* 筛选栏 */
 .header-spacer {
-  height: 56px;
+  height: 48px;
   flex-shrink: 0;
 }
 
@@ -357,7 +358,7 @@ onMounted(() => {
   gap: 14px;
   width: 100%;
   max-width: var(--max-content);
-  padding-bottom: 60px;
+  padding-bottom: 50px;
 }
 
 @media (min-width: 768px) {

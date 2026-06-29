@@ -4,28 +4,23 @@
   <nav class="bottom-tabbar" v-if="showTabbar">
     <router-link to="/hosts" class="tab-item" active-class="active" exact-active-class="active">
       <span class="material-symbols-outlined tab-icon">tv</span>
-      <span class="tab-text">组播源</span>
+      <span class="tab-text">主机</span>
     </router-link>
 
-    <router-link to="/configs" class="tab-item" active-class="active">
+    <router-link to="/scan" class="tab-item" active-class="active">
       <span class="material-symbols-outlined tab-icon">analytics</span>
-      <span class="tab-text">扫描配置</span>
+      <span class="tab-text">扫描</span>
     </router-link>
 
-    <router-link to="/sources" class="tab-item" active-class="active">
+    <router-link to="/subscriptions" class="tab-item" active-class="active">
       <span class="material-symbols-outlined tab-icon">rss_feed</span>
-      <span class="tab-text">数据源</span>
+      <span class="tab-text">订阅</span>
     </router-link>
 
     <router-link to="/settings" class="tab-item" active-class="active">
       <span class="material-symbols-outlined tab-icon">settings</span>
-      <span class="tab-text">全局设置</span>
+      <span class="tab-text">设置</span>
     </router-link>
-
-    <button class="tab-item logout-btn" @click="handleLogout">
-      <span class="material-symbols-outlined tab-icon">logout</span>
-      <span class="tab-text">退出</span>
-    </button>
   </nav>
 
   <!-- 未登录时的登录按钮 -->
@@ -37,12 +32,11 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
-const router = useRouter()
 
 const showTabbar = computed(() => {
   return authStore.isLoggedIn && !route.meta?.hideNavbar && route.path !== '/login'
@@ -51,22 +45,9 @@ const showTabbar = computed(() => {
 const showLoginBtn = computed(() => {
   return !authStore.isLoggedIn && route.path !== '/login'
 })
-
-const handleLogout = async () => {
-  await authStore.logout()
-  router.push('/login')
-}
 </script>
 
 <style scoped>
-.logout-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-red);
-  width: 20%;
-}
-
 .floating-login {
   position: fixed;
   bottom: 20px;

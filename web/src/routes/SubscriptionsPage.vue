@@ -1,9 +1,9 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">数据源</h1>
+      <h1 class="page-title">订阅</h1>
       <button class="action-btn primary-btn" @click="startAddSub">
-        <span class="material-symbols-outlined icon-g-btn">add</span> 添加订阅
+        <span class="material-symbols-outlined icon-g-btn">add</span>
       </button>
     </div>
 
@@ -72,7 +72,7 @@
       </TransitionGroup>
 
       <div v-if="loaded && subscriptions.length === 0" class="empty-state">
-        暂无数据源，点击右上角添加
+        暂无订阅，点击右上角添加
       </div>
     </div>
 
@@ -85,11 +85,11 @@
         </div>
         <div class="drawer-form">
           <div class="form-item">
-            <label>数据源名称</label>
+            <label>订阅名称</label>
             <input v-model="formData.name" type="text" placeholder="例：鹰图平台" />
           </div>
           <div class="form-item">
-            <label>数据源唯一 ID</label>
+            <label>订阅唯一 ID</label>
             <input v-model="formData.uid" type="text" placeholder="例：hunter，用于 sourceType" />
           </div>
           <div class="form-item">
@@ -193,7 +193,7 @@ const handleSaveSub = async () => {
 }
 
 const handleDeleteSub = async (sub) => {
-  if (!confirm(`确定删除订阅「${sub.name}」？将同时清除该数据源的缓存。`)) return
+  if (!confirm(`确定删除订阅「${sub.name}」？将同时清除该订阅的缓存。`)) return
   try {
     await request.delete(`/subscriptions/${sub.id}`)
     toast.success('已删除')
@@ -242,6 +242,7 @@ onMounted(loadSubscriptions)
   background: rgba(245, 245, 247, 0.92);
   backdrop-filter: blur(20px);
   padding: 12px 16px;
+  min-height: 56px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -277,7 +278,7 @@ onMounted(loadSubscriptions)
   gap: 16px;
   width: 100%;
   max-width: var(--max-content);
-  padding-bottom: 90px;
+  padding-bottom: 70px;
 }
 @media (min-width: 768px) {
   .config-list {
@@ -477,11 +478,11 @@ input:checked + .slider:before {
 .primary-btn {
   background: var(--color-blue);
   color: #fff;
-  padding: 8px 14px;
-  border-radius: var(--radius-btn);
+  padding: 8px;
+  border-radius: 50%;
 }
 .icon-g-btn {
-  font-size: 16px !important;
+  font-size: 18px !important;
 }
 
 /* ===== 骨架屏 ===== */
