@@ -266,11 +266,6 @@ onMounted(loadSubscriptions)
   }
 }
 
-.header-spacer {
-  height: 48px;
-  flex-shrink: 0;
-}
-
 /* ===== 列表 Grid ===== */
 .config-list {
   display: grid;
@@ -483,47 +478,6 @@ input:checked + .slider:before {
 }
 .icon-g-btn {
   font-size: 18px !important;
-}
-
-/* ===== 骨架屏 ===== */
-.skeleton-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
-}
-.skeleton-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-card);
-  padding: 20px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid rgba(0, 0, 0, 0.01);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.skeleton-line {
-  background: var(--bg-neutral);
-  border-radius: 6px;
-  height: 14px;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-.skeleton-title {
-  width: 40%;
-}
-.skeleton-sub {
-  width: 70%;
-}
-.skeleton-sub.narrow {
-  width: 50%;
-}
-@keyframes skeleton-pulse {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 /* ===== 空状态 ===== */

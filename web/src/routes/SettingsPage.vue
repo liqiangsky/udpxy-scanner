@@ -155,11 +155,6 @@ const handleLogout = async () => {
   .page-header { max-width: 1400px; }
 }
 
-.header-spacer {
-  height: 48px;
-  flex-shrink: 0;
-}
-
 .settings-flow {
   width: 100%;
   max-width: var(--max-content);
@@ -170,76 +165,22 @@ const handleLogout = async () => {
 }
 
 @media (min-width: 768px) {
-  .settings-flow { max-width: 720px; }
+  .settings-flow {
+    max-width: 720px;
+    grid-template-columns: 1fr 1fr;
+  }
 }
-
-.settings-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-card);
-  padding: 20px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid rgba(0, 0, 0, 0.01);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+@media (min-width: 1024px) {
+  .settings-flow {
+    max-width: 1100px;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
 }
-
-.card-title-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid var(--bg-neutral);
-  padding-bottom: 10px;
-}
-
-.card-icon {
-  font-size: 18px !important;
-  color: var(--color-blue);
-  font-variation-settings: 'FILL' 0, 'wght' 500;
-}
-
-.card-title-group h2 {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.field-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  padding-left: 2px;
-}
-
-.fetch-btn-mini {
-  background: var(--color-blue);
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: var(--radius-input);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.fetch-btn-mini:active {
-  transform: scale(0.96);
-  background: #0066d6;
-}
-.fetch-btn-mini.fetching {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.fetch-icon {
-  font-size: 16px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+@media (min-width: 1440px) {
+  .settings-flow {
+    max-width: 1400px;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
 }
 
 /* 入口卡片（参数管理、后台日志） */

@@ -110,6 +110,20 @@ onUnmounted(() => {
     margin-right: auto;
   }
 }
+@media (min-width: 1024px) {
+  .page-header {
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+@media (min-width: 1440px) {
+  .page-header {
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
 
 .page-title {
   flex: 1;
@@ -117,27 +131,6 @@ onUnmounted(() => {
   font-size: 18px;
   font-weight: 700;
   margin: 0;
-}
-
-.back-btn {
-  background: #e5e5ea;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-.back-btn .material-symbols-outlined {
-  font-size: 20px !important;
-  color: var(--text-primary);
-}
-.back-btn:active {
-  transform: scale(0.9);
 }
 
 .refresh-btn {
@@ -165,16 +158,28 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.header-spacer {
-  height: 56px;
-  flex-shrink: 0;
-}
-
 .log-viewer {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 720px;
+  width: 100%;
+  max-width: var(--max-content);
+}
+
+@media (min-width: 768px) {
+  .log-viewer {
+    max-width: 720px;
+  }
+}
+@media (min-width: 1024px) {
+  .log-viewer {
+    max-width: 1100px;
+  }
+}
+@media (min-width: 1440px) {
+  .log-viewer {
+    max-width: 1400px;
+  }
 }
 
 .log-empty {
@@ -208,12 +213,5 @@ onUnmounted(() => {
 
 .log-warning .log-text {
   color: var(--color-orange);
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 </style>

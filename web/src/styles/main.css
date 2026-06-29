@@ -394,7 +394,156 @@ button:disabled {
   background: #0066d6;
 }
 
-/* 底部 TabBar */
+/* ==========================================================================
+   8. 通用可复用组件（从各页面 scoped 提取）
+   ========================================================================== */
+
+/* 顶部固定导航栏占位 spacer */
+.header-spacer {
+  height: 48px;
+  flex-shrink: 0;
+}
+
+/* 旋转动画 */
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 圆形返回按钮 */
+.back-btn {
+  background: #e5e5ea;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.back-btn .material-symbols-outlined {
+  font-size: 20px !important;
+  color: var(--text-primary);
+}
+.back-btn:active {
+  transform: scale(0.9);
+}
+
+/* 蓝色小型操作按钮（手动扫描/复测/修改密码等） */
+.fetch-btn-mini {
+  background: var(--color-blue);
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: var(--radius-input);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.fetch-btn-mini:active {
+  transform: scale(0.96);
+  background: #0066d6;
+}
+.fetch-btn-mini.fetching {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.fetch-icon {
+  font-size: 16px !important;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+/* 设置卡片（参数管理、设置共用） */
+.settings-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(0, 0, 0, 0.01);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--bg-neutral);
+  padding-bottom: 10px;
+}
+
+.card-icon {
+  font-size: 18px !important;
+  color: var(--color-blue);
+  font-variation-settings: 'FILL' 0, 'wght' 500;
+}
+
+.card-title-group h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.field-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding-left: 2px;
+}
+
+/* 骨架屏 */
+.skeleton-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+.skeleton-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-line {
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--bg-neutral) 25%, #e8e8ed 50%, var(--bg-neutral) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+.skeleton-title {
+  width: 60%;
+}
+.skeleton-sub {
+  width: 40%;
+}
+.skeleton-sub.narrow {
+  width: 25%;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ==========================================================================
+   9. 底部 TabBar
+   ========================================================================== */
 .bottom-tabbar {
   position: fixed;
   bottom: 12px;

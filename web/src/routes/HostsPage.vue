@@ -345,12 +345,6 @@ onMounted(() => {
   background-color: #e8e8ed;
 }
 
-/* 筛选栏 */
-.header-spacer {
-  height: 48px;
-  flex-shrink: 0;
-}
-
 /* 列表 */
 .list-wrapper {
   display: grid;
@@ -376,42 +370,6 @@ onMounted(() => {
 @media (min-width: 1440px) {
   .list-wrapper {
     max-width: 1400px;
-  }
-}
-
-/* 骨架屏 */
-.skeleton-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 14px;
-}
-.skeleton-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-card);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.skeleton-line {
-  height: 16px;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--bg-neutral) 25%, #e8e8ed 50%, var(--bg-neutral) 75%);
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.5s infinite;
-}
-.skeleton-title {
-  width: 60%;
-}
-.skeleton-sub {
-  width: 40%;
-}
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
   }
 }
 

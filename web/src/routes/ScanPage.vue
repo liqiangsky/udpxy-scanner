@@ -464,10 +464,6 @@ onUnmounted(() => {
     max-width: 1400px;
   }
 }
-.header-spacer {
-  height: 48px;
-  flex-shrink: 0;
-}
 .action-btn {
   border: none;
   outline: none;
@@ -893,14 +889,6 @@ onUnmounted(() => {
   background: #e8e8ed;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 @keyframes pulse {
   0% {
     transform: scale(1);
@@ -921,46 +909,6 @@ onUnmounted(() => {
   }
   to {
     transform: translateY(0);
-  }
-}
-
-/* 骨架屏 */
-.skeleton-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
-  padding-bottom: 70px;
-}
-.skeleton-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-card);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.skeleton-line {
-  height: 16px;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--bg-neutral) 25%, #e8e8ed 50%, var(--bg-neutral) 75%);
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.5s infinite;
-}
-.skeleton-title {
-  width: 60%;
-}
-.skeleton-sub {
-  width: 40%;
-}
-.skeleton-sub.narrow {
-  width: 25%;
-}
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
   }
 }
 

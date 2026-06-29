@@ -268,7 +268,6 @@ onMounted(() => {
   gap: 8px;
   max-width: 100vw;
 }
-
 @media (min-width: 768px) {
   .page-header {
     max-width: 720px;
@@ -295,39 +294,12 @@ onMounted(() => {
   margin: 0;
 }
 
-.back-btn {
-  background: #e5e5ea;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-.back-btn .material-symbols-outlined {
-  font-size: 20px !important;
-  color: var(--text-primary);
-}
-.back-btn:active {
-  transform: scale(0.9);
-}
-
-.header-spacer {
-  height: 48px;
-  flex-shrink: 0;
-}
-
 .settings-flow {
   width: 100%;
   max-width: var(--max-content);
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
-  /* padding-bottom: 90px; */
 }
 
 @media (min-width: 768px) {
@@ -347,45 +319,6 @@ onMounted(() => {
     max-width: 1400px;
     grid-template-columns: 1fr 1fr 1fr;
   }
-}
-
-.settings-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-card);
-  padding: 20px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid rgba(0, 0, 0, 0.01);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.card-title-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid var(--bg-neutral);
-  padding-bottom: 10px;
-}
-
-.card-icon {
-  font-size: 18px !important;
-  color: var(--color-blue);
-  font-variation-settings: 'FILL' 0, 'wght' 500;
-}
-
-.card-title-group h2 {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.field-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  padding-left: 2px;
 }
 
 .header-icon-btn {
@@ -412,40 +345,6 @@ onMounted(() => {
 .header-icon-btn.fetching {
   opacity: 0.5;
   pointer-events: none;
-}
-
-.fetch-btn-mini {
-  background: var(--color-blue);
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: var(--radius-input);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.fetch-btn-mini:active {
-  transform: scale(0.96);
-  background: #0066d6;
-}
-.fetch-btn-mini.fetching {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.fetch-icon {
-  font-size: 16px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
 }
 
 .cron-help {
