@@ -55,6 +55,8 @@ def _merge_three_old_dbs(data_dir: str, target_path: str):
     for fname, fpath in found.items():
         old = sqlite3.connect(fpath)
         old.row_factory = sqlite3.Row
+        # 强制 WAL checkpoint，确保 -wal/-shm 文件释放
+        old.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         for table in _OLD_FILES[fname]:
             if not old.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
@@ -70,6 +72,7 @@ def _merge_three_old_dbs(data_dir: str, target_path: str):
                 "types": col_types,
                 "rows": [_to_dict(r) for r in rows],
             }
+        old.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         old.close()
 
     if old_data:
@@ -97,7 +100,10 @@ def _merge_three_old_dbs(data_dir: str, target_path: str):
         for suf in ("", "-wal", "-shm"):
             f = os.path.join(data_dir, fname) + suf
             if os.path.exists(f):
-                os.remove(f)
+                try:
+                    os.remove(f)
+                except PermissionError:
+                    pass
     print(f"  🗑️  旧 3 文件已清理")
     return old_data
 
@@ -121,7 +127,10 @@ def _delete_db(db_path: str):
     for suffix in ("", "-wal", "-shm"):
         f = db_path + suffix
         if os.path.exists(f):
-            os.remove(f)
+            try:
+                os.remove(f)
+            except PermissionError:
+                pass
 
 
 # 列名映射：旧列名 -> 新列名
