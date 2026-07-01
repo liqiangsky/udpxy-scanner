@@ -16,7 +16,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const login = async (pass) => {
-    const res = await request.post('/login', { password: pass })
+    const res = await request.post('/login', { password: pass.trim() })
     isLoggedIn.value = true
     localStorage.setItem('auth_token', res.token)
     return res

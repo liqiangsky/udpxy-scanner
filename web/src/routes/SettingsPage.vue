@@ -54,9 +54,13 @@
       <!-- 游离主机入口 -->
       <div class="settings-card entry-card" @click="$router.push('/settings/orphans')">
         <div class="card-title-group">
-          <span class="material-symbols-outlined card-icon" style="color: var(--color-orange)">broadcast_on_personal</span>
+          <span class="material-symbols-outlined card-icon" style="color: var(--color-orange)"
+            >broadcast_on_personal</span
+          >
           <h2>游离主机</h2>
-          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-orange)">chevron_right</span>
+          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-orange)"
+            >chevron_right</span
+          >
         </div>
         <p class="field-desc">管理已不在主机池中的缓存主机</p>
       </div>
@@ -74,9 +78,13 @@
       <!-- 退出登录 -->
       <div class="settings-card logout-card" @click="handleLogout">
         <div class="card-title-group">
-          <span class="material-symbols-outlined card-icon" style="color: var(--color-red)">logout</span>
+          <span class="material-symbols-outlined card-icon" style="color: var(--color-red)"
+            >logout</span
+          >
           <h2 style="color: var(--color-red)">退出登录</h2>
-          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-red)">chevron_right</span>
+          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-red)"
+            >chevron_right</span
+          >
         </div>
         <p class="field-desc">退出当前账号，返回登录页面</p>
       </div>
@@ -112,8 +120,8 @@ const handleChangePassword = async () => {
   changingPassword.value = true
   try {
     await request.post('/change-password', {
-      oldPassword: passwordForm.oldPassword,
-      newPassword: passwordForm.newPassword,
+      oldPassword: passwordForm.oldPassword.trim(),
+      newPassword: passwordForm.newPassword.trim(),
     })
     toast.success('密码已修改，请重新登录')
     passwordForm.oldPassword = ''
@@ -159,10 +167,14 @@ const handleLogout = async () => {
   }
 }
 @media (min-width: 1024px) {
-  .page-header { max-width: 1100px; }
+  .page-header {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .page-header { max-width: 1400px; }
+  .page-header {
+    max-width: 1400px;
+  }
 }
 
 .settings-flow {

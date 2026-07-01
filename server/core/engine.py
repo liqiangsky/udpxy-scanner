@@ -287,8 +287,8 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                     config.get("templateOperator", ""),
                                     item["geoRegion"], item["geoOperator"],
                                     item["delay"], item["protocol"],
-                                    config["templateTargetAddress"],
-                                    config["templateTargetName"],
+                                    config["templateTargetAddress"].strip(),
+                                    config["templateTargetName"].strip(),
                                     now_stamp, now_stamp,
                                     item["delay"], now_stamp,
                                     item["geoRegion"], item["geoOperator"]

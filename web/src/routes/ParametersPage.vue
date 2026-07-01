@@ -116,11 +116,26 @@
               <p><b>格式</b>：分 时 日 月 周（5 个字段，空格分隔）</p>
               <p><b>取值范围</b>：</p>
               <table>
-                <tr><td>分</td><td>0-59</td></tr>
-                <tr><td>时</td><td>0-23</td></tr>
-                <tr><td>日</td><td>1-31</td></tr>
-                <tr><td>月</td><td>1-12</td></tr>
-                <tr><td>周</td><td>1-7（1=周一，7=周日）</td></tr>
+                <tr>
+                  <td>分</td>
+                  <td>0-59</td>
+                </tr>
+                <tr>
+                  <td>时</td>
+                  <td>0-23</td>
+                </tr>
+                <tr>
+                  <td>日</td>
+                  <td>1-31</td>
+                </tr>
+                <tr>
+                  <td>月</td>
+                  <td>1-12</td>
+                </tr>
+                <tr>
+                  <td>周</td>
+                  <td>1-7（1=周一，7=周日）</td>
+                </tr>
               </table>
               <p><b>常用符号</b>：</p>
               <p><code>*</code> 表示任意值</p>
@@ -159,13 +174,17 @@
             外部服务调用 <code>/api/source/push</code> 时需携带
             <code>X-API-Key</code> 头部。留空则禁用推送接口。
           </p>
-          <button type="button" class="fetch-btn-mini" style="margin-top: 8px" @click="generateApiKey">
+          <button
+            type="button"
+            class="fetch-btn-mini"
+            style="margin-top: 8px"
+            @click="generateApiKey"
+          >
             <span class="material-symbols-outlined fetch-icon">refresh</span>
             <span>生成随机 Key</span>
           </button>
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -202,9 +221,9 @@ const handleSave = async () => {
       concurrency: settings.engine.concurrency,
       timeout: settings.engine.timeout,
       configDelay: settings.engine.configDelay,
-      scanCron: settings.scheduling.scanCron,
-      janitorCron: settings.scheduling.janitorCron,
-      pushApiKey: settings.pushApiKey,
+      scanCron: (settings.scheduling.scanCron || '').trim(),
+      janitorCron: (settings.scheduling.janitorCron || '').trim(),
+      pushApiKey: (settings.pushApiKey || '').trim(),
     }
     await settingsStore.update(payload)
     toast.success('参数已保存')
@@ -367,7 +386,9 @@ onMounted(() => {
   background: var(--bg-neutral);
   border-radius: var(--radius-input);
 }
-.help-content p { margin: 4px 0; }
+.help-content p {
+  margin: 4px 0;
+}
 .help-content code {
   background: #e8e8ed;
   padding: 2px 6px;

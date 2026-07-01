@@ -171,10 +171,20 @@ const handleSaveSub = async () => {
   }
   try {
     if (editingId.value) {
-      await request.put(`/subscriptions/${editingId.value}`, formData)
+      await request.put(`/subscriptions/${editingId.value}`, {
+        name: formData.name.trim(),
+        uid: formData.uid.trim(),
+        url: formData.url.trim(),
+        fetchCron: formData.fetchCron.trim(),
+      })
       toast.success('已更新')
     } else {
-      await request.post('/subscriptions', formData)
+      await request.post('/subscriptions', {
+        name: formData.name.trim(),
+        uid: formData.uid.trim(),
+        url: formData.url.trim(),
+        fetchCron: formData.fetchCron.trim(),
+      })
       toast.success('已添加')
     }
     formVisible.value = false
@@ -198,9 +208,11 @@ const handleDeleteSub = async (sub) => {
 
 const handleToggleEnabled = async (sub) => {
   try {
-    const { name, uid, url, fetchCron = '' } = sub
     await request.put(`/subscriptions/${sub.id}`, {
-      name, uid, url, fetchCron,
+      name: sub.name?.trim(),
+      uid: sub.uid?.trim(),
+      url: sub.url?.trim(),
+      fetchCron: (sub.fetchCron || '').trim(),
       enabled: !sub.enabled,
     })
     await loadSubscriptions()

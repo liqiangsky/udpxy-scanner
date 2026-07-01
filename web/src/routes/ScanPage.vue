@@ -365,6 +365,11 @@ const handleSubmit = async () => {
 
   const payload = {
     ...formData,
+    name: formData.name?.trim(),
+    targetName: formData.targetName?.trim(),
+    targetAddress: formData.targetAddress?.trim(),
+    region: formData.region?.trim(),
+    operator: formData.operator?.trim(),
     dataSource: formData.dataSources.join(','),
   }
   delete payload.dataSources
@@ -402,14 +407,13 @@ const handleToggleEnable = async (config) => {
   }
   const newEnabled = !config.enabled
   try {
-    const { name, templateRegion, templateOperator, templateTargetName, templateTargetAddress, dataSource = '' } = config
     await request.put(`/configs/${config.id}`, {
-      name,
-      region: templateRegion || '',
-      operator: templateOperator || '',
-      targetName: templateTargetName || '',
-      targetAddress: templateTargetAddress || '',
-      dataSource,
+      name: config.name?.trim(),
+      region: (config.templateRegion || '').trim(),
+      operator: (config.templateOperator || '').trim(),
+      targetName: (config.templateTargetName || '').trim(),
+      targetAddress: (config.templateTargetAddress || '').trim(),
+      dataSource: (config.dataSource || '').trim(),
       enabled: newEnabled,
     })
     toast.success(newEnabled ? '已启用' : '已禁用')

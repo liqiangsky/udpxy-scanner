@@ -5,6 +5,8 @@ import time
 from typing import Optional
 
 async def verify_single_host(session: aiohttp.ClientSession, host: str, target_addr: str, timeout_sec: float, should_stop_func, protocol: str = None) -> Optional[dict]:
+    host = host.strip()
+    target_addr = target_addr.strip()
     protocols = [protocol.lower().strip()] if protocol else ["rtp", "udp"]
     for proto in protocols:
         if should_stop_func(): return None
@@ -20,6 +22,7 @@ async def verify_single_host(session: aiohttp.ClientSession, host: str, target_a
                             delay = int((time.time() - start_time) * 1000)
                             return {"url": test_url, "protocol": proto, "delay": delay}
                         await asyncio.sleep(0.5)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"⚠️ [验证异常] {test_url} -> {type(e).__name__}: {e}")
             continue
     return None
