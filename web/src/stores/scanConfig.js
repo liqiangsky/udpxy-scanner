@@ -67,14 +67,6 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
     }
   }
 
-  const removeFromQueue = (configId) => {
-    progress.value.queuedIds = progress.value.queuedIds.filter((id) => id !== configId)
-    if (progress.value.currentId === configId) {
-      progress.value.currentId = null
-      progress.value.running = false
-    }
-  }
-
   return {
     configs,
     loaded,
@@ -85,6 +77,5 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
     stopPolling,
     refresh,
     addToQueue,
-    removeFromQueue,
   }
 })

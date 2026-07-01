@@ -6,9 +6,9 @@ import logging
 
 from typing import List
 
-from db.database import get_db, get_iptv_db, get_setting, run_in_thread
+from db.database import get_db, get_setting, run_in_thread
 from core.status import task_runner
-from services.source_cache import get_cached_hosts, cache_host_geo_batch, get_existing_iptv_hosts_batch
+from services.source_cache import get_cached_hosts, cache_host_geo_batch, get_existing_hosts_batch
 from services.validator import verify_single_host
 from services.geoip import enrich_geo_batch
 
@@ -18,43 +18,55 @@ logger = logging.getLogger("扫描引擎")
 _db_write_lock = threading.Lock()
 
 
-def _fetch_scan_config(cfg_id: int):
+def _fetch_config(cfg_id: int):
     with get_db() as conn:
-        return conn.execute("SELECT * FROM scan_config WHERE id=?", (cfg_id,)).fetchone()
+        return conn.execute("SELECT * FROM config WHERE id=?", (cfg_id,)).fetchone()
 
 
 def _update_config_timestamp(cfg_id: int):
     with get_db() as conn:
-        conn.execute("UPDATE scan_config SET updatedAt=datetime('now') WHERE id=?", (cfg_id,))
+        conn.execute("UPDATE config SET updatedAt=? WHERE id=?", (int(time.time()), cfg_id))
 
 
-def _fetch_enabled_subscriptions():
+def _fetch_enabled_subscription():
     with get_db() as conn:
-        return [dict(r) for r in conn.execute("SELECT uid, name FROM api_subscriptions WHERE enabled=1").fetchall()]
+        return [dict(r) for r in conn.execute("SELECT uid, name FROM subscription WHERE enabled=1").fetchall()]
 
 
-def _batch_insert_iptv(batch_rows: list):
+def _batch_insert_hosts(batch_rows: list):
+    if not batch_rows:
+        return
     with _db_write_lock:
-        with get_iptv_db() as conn:
+        with get_db() as conn:
             conn.executemany("""
-                INSERT INTO iptv_list (
+                INSERT INTO host (
                     host, ip, port,
                     sourceType, sourceName,
                     region, operator,
                     geoRegion, geoOperator,
                     delay, protocol,
                     target, channelName,
-                    createTime, updateTime
+                    createdAt, updatedAt
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 ON CONFLICT(host, target, channelName)
                 DO UPDATE SET
                     delay = ?,
-                    updateTime = ?,
+                    updatedAt = ?,
                     geoRegion = ?,
                     geoOperator = ?
             """, batch_rows)
+
+        # 将已入库的 host 标记为 active=1
+        hosts = list(set(row[0] for row in batch_rows))
+        if hosts:
+            with get_db() as conn:
+                placeholders = ",".join("?" for _ in hosts)
+                conn.execute(
+                    f"UPDATE cache SET active = 1 WHERE host IN ({placeholders})",
+                    hosts
+                )
 
 
 async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False):
@@ -106,7 +118,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                 # 针对其他配置的中断（如移除排队任务），不影响当前
                 logger.info(f"🔄 [中断清除] cfg_id={cfg_id}（中断针对 cfg_id={target}，不影响当前）")
 
-            row_data = await run_in_thread(lambda: _fetch_scan_config(cfg_id))
+            row_data = await run_in_thread(lambda: _fetch_config(cfg_id))
 
             if not row_data:
                 logger.warning(f"⚠️ [配置不存在] cfg_id={cfg_id}，跳到 index={index + 1}")
@@ -129,7 +141,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
             try:
                 # 解析 dataSource → uid 列表（空 = 全部启用订阅，逗号分隔 = 指定 uid）
                 raw_ds = config.get("dataSource", "").strip()
-                all_subs = await run_in_thread(_fetch_enabled_subscriptions)
+                all_subs = await run_in_thread(_fetch_enabled_subscription)
                 subs_map = {s["uid"]: s["name"] for s in all_subs}
 
                 if raw_ds:
@@ -155,7 +167,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                     run_concurrency = global_concurrency
 
                     all_host_items = [h[0] for h in candidate_hosts]
-                    existing_hosts = get_existing_iptv_hosts_batch(all_host_items)
+                    existing_hosts = get_existing_hosts_batch(all_host_items)
                     logger.info(f"🔍 [去重] {len(existing_hosts)}/{len(all_host_items)} 个 host 已在活源池中")
 
                     candidate_hosts_filtered = [
@@ -253,13 +265,13 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                             await run_in_thread(cache_host_geo_batch, geo_rows)
 
                         if new_geo_count:
-                            logger.info(f"💾 [geo缓存] {new_geo_count} 条新 geo 信息已写入 source_cache")
+                            logger.info(f"💾 [geo缓存] {new_geo_count} 条新 geo 信息已写入 cache")
 
                         enriched = [item for item in enriched if item.get("geoRegion")]
                         if not enriched:
                             logger.info(f"⏭️ [geo为空] {config['name']} 所有有效 host 的 geo 信息为空，跳过入库")
                         else:
-                            now_stamp = int(time.time() * 1000)
+                            now_stamp = int(time.time())
 
                             batch_rows = []
                             for item in enriched:
@@ -282,10 +294,10 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                     item["geoRegion"], item["geoOperator"]
                                 ))
 
-                            await run_in_thread(_batch_insert_iptv, batch_rows)
+                            await run_in_thread(_batch_insert_hosts, batch_rows)
 
                             total_valid += len(enriched)
-                            logger.info(f"📥 [入库] {len(enriched)} 条写入 iptv_list")
+                            logger.info(f"📥 [入库] {len(enriched)} 条写入 host")
 
                     valid_count = len(_valid_hosts) if _valid_hosts else 0
                     logger.info(f"✅ [扫描完成] {config['name']}(id={cfg_id}) -> 有效={valid_count}, 候选={len(candidate_hosts)}")
@@ -309,7 +321,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
             next_queue = list(progress_now["config_ids"])
             if index < len(next_queue):
                 next_cfg_id = next_queue[index]
-                next_cfg = await run_in_thread(lambda: _fetch_scan_config(next_cfg_id))
+                next_cfg = await run_in_thread(lambda: _fetch_config(next_cfg_id))
                 next_name = dict(next_cfg)["name"] if next_cfg else f"id={next_cfg_id}"
                 task_runner.update_progress(index, next_name)
             else:

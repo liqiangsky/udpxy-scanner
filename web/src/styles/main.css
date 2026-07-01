@@ -220,12 +220,6 @@ button:disabled {
   /*text-transform: uppercase;*/
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
 .form-group {
   display: flex;
   flex-direction: column;
@@ -353,45 +347,6 @@ button:disabled {
   left: 12px;
   font-size: 16px !important;
   color: var(--text-disabled);
-}
-
-/* select 箭头图标 */
-.select-with-arrow {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%238E8E93' d='M0 0h10L5 6z'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-}
-
-/* ==========================================================================
-   7. 按钮通用
-   ========================================================================== */
-.btn-action {
-  border: none;
-  outline: none;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.btn-action:active {
-  transform: scale(0.96);
-}
-
-.btn-primary {
-  background: var(--color-blue);
-  color: #ffffff;
-  padding: 8px 14px;
-  border-radius: var(--radius-btn);
-  font-size: 13.5px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.btn-primary:active {
-  transform: scale(0.96);
-  background: #0066d6;
 }
 
 /* ==========================================================================

@@ -41,6 +41,12 @@ const routes = [
     meta: { requiresAuth: true, hideNavbar: true },
   },
   {
+    path: '/settings/orphans',
+    name: 'orphans',
+    component: () => import('@/routes/OrphanHostsPage.vue'),
+    meta: { requiresAuth: true, hideNavbar: true },
+  },
+  {
     path: '/logs',
     name: 'logs',
     component: () => import('@/routes/LogsPage.vue'),

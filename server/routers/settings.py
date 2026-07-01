@@ -25,12 +25,12 @@ def api_get_settings():
 @router.put("/settings")
 def api_update_settings(data: GlobalSettingsUpdate):
     with get_db() as conn:
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('concurrency', ?)", (str(data.concurrency),))
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('timeout', ?)", (str(data.timeout),))
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('config_delay', ?)", (str(data.configDelay),))
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('janitor_cron', ?)", (data.janitorCron,))
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('scan_cron', ?)", (data.scanCron,))
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('push_api_key', ?)", (data.pushApiKey,))
+        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('concurrency', ?)", (str(data.concurrency),))
+        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('timeout', ?)", (str(data.timeout),))
+        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('config_delay', ?)", (str(data.configDelay),))
+        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('janitor_cron', ?)", (data.janitorCron,))
+        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('scan_cron', ?)", (data.scanCron,))
+        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('push_api_key', ?)", (data.pushApiKey,))
     with _settings_cache_lock:
         _settings_cache.clear()
     return {"ok": True}

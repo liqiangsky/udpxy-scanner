@@ -1,10 +1,10 @@
 # services/source_cache.py
 """
-公共缓存表 source_cache 读写工具
+公共缓存表 cache 读写工具
 """
 import logging
 from typing import List, Optional
-from db.database import get_cache_db
+from db.database import get_db
 
 logger = logging.getLogger("数据缓存")
 
@@ -15,7 +15,7 @@ def cache_sources(source_type: str, sources: List[dict]):
     if not sources:
         return
 
-    with get_cache_db() as conn:
+    with get_db() as conn:
         seen = set()
         rows = []
         for s in sources:
@@ -29,7 +29,7 @@ def cache_sources(source_type: str, sources: List[dict]):
 
         if rows:
             conn.executemany(
-                "INSERT OR IGNORE INTO source_cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
                 rows
             )
             regions = set(r[2] for r in rows)
@@ -37,15 +37,15 @@ def cache_sources(source_type: str, sources: List[dict]):
 
 
 def get_cached_hosts(source_type: str, region: str = "") -> List[str]:
-    with get_cache_db() as conn:
+    with get_db() as conn:
         if region:
             rows = conn.execute(
-                "SELECT DISTINCT host FROM source_cache WHERE sourceType=? AND geoRegion=?",
+                "SELECT DISTINCT host FROM cache WHERE sourceType=? AND geoRegion=?",
                 (source_type, region)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT DISTINCT host FROM source_cache WHERE sourceType=?",
+                "SELECT DISTINCT host FROM cache WHERE sourceType=?",
                 (source_type,)
             ).fetchall()
         return [r["host"] for r in rows]
@@ -55,12 +55,12 @@ def get_cached_geo_batch(hosts: List[str], chunk_size: int = 500) -> dict:
     if not hosts:
         return {}
     result = {}
-    with get_cache_db() as conn:
+    with get_db() as conn:
         for i in range(0, len(hosts), chunk_size):
             chunk = hosts[i:i + chunk_size]
             placeholders = ",".join("?" for _ in chunk)
             rows = conn.execute(
-                f"SELECT host, geoRegion, geoOperator FROM source_cache WHERE host IN ({placeholders})",
+                f"SELECT host, geoRegion, geoOperator FROM cache WHERE host IN ({placeholders})",
                 chunk
             ).fetchall()
             for row in rows:
@@ -69,17 +69,17 @@ def get_cached_geo_batch(hosts: List[str], chunk_size: int = 500) -> dict:
     return result
 
 
-def get_existing_iptv_hosts_batch(hosts: List[str], chunk_size: int = 500) -> set:
+def get_existing_hosts_batch(hosts: List[str], chunk_size: int = 500) -> set:
     if not hosts:
         return set()
-    from db.database import get_iptv_db
+    from db.database import get_db
     result = set()
-    with get_iptv_db() as conn:
+    with get_db() as conn:
         for i in range(0, len(hosts), chunk_size):
             chunk = hosts[i:i + chunk_size]
             placeholders = ",".join("?" for _ in chunk)
             rows = conn.execute(
-                f"SELECT DISTINCT host FROM iptv_list WHERE host IN ({placeholders})",
+                f"SELECT DISTINCT host FROM host WHERE host IN ({placeholders})",
                 chunk
             ).fetchall()
             result.update(row["host"] for row in rows)
@@ -87,9 +87,9 @@ def get_existing_iptv_hosts_batch(hosts: List[str], chunk_size: int = 500) -> se
 
 
 def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: str):
-    with get_cache_db() as conn:
+    with get_db() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO source_cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
             (source_type, host, geo_region, geo_operator)
         )
 
@@ -97,9 +97,9 @@ def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: s
 def cache_host_geo_batch(rows: list):
     if not rows:
         return
-    with get_cache_db() as conn:
+    with get_db() as conn:
         conn.executemany(
-            "INSERT OR IGNORE INTO source_cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
             rows
         )
 

@@ -2,21 +2,21 @@
 
 ## 一、系统架构
 
-### 数据库（3 库 3 表）
+### 数据库（1 库 5 表）
 
-| 数据库 | 主表 | 用途 |
-|--------|------|------|
-| `udpxy_scanner.db` | `settings` | 全局配置（并发数、超时、cron、推送 API Key、密码） |
-| | `scan_config` | 扫描配置（名称、数据源、模板地区/运营商/频道/地址、启用状态） |
-| | `api_subscriptions` | API 订阅（名称、uid、URL、cron、启用状态） |
-| `source_cache.db` | `source_cache` | host 缓存池（host 唯一，sourceType 记录首次发现来源, geoRegion, geoOperator） |
-| `iptv_list.db` | `iptv_list` | 活源池（host+target+channelName 唯一约束） |
+| 数据库 | 表 | 用途 |
+|--------|-----|------|
+| `data.db` | `parameter` | 参数管理（并发数、超时、cron、推送 API Key、密码） |
+| | `config` | 扫描配置（名称、数据源、模板地区/运营商/频道/地址、启用状态） |
+| | `subscription` | API 订阅（名称、uid、URL、cron、启用状态） |
+| | `cache` | host 缓存池（host 唯一，sourceType 记录首次发现来源, geoRegion, geoOperator） |
+| | `host` | 活源池（host+target+channelName 唯一约束） |
 
 ### 核心模块
 
 | 模块 | 职责 |
 |------|------|
-| `core/engine.py` | 扫描引擎：从 source_cache 过滤候选 → 验证 → 写入 iptv_list |
+| `core/engine.py` | 扫描引擎：从 source_cache 过滤候选 → 验证 → 写入 hosts |
 | `core/status.py` | 任务状态：扫描/复测的启停、进度、队列管理 |
 | `services/geoip.py` | GeoIP 服务：health_check + ip2region 地理位置查询 + 内网/国外过滤 |
 | `services/validator.py` | 流验证：GET /{proto}/{target} → 读 512B → 判定有效 |
@@ -89,7 +89,7 @@
 
 ---
 
-## 三、流程 B：扫描配置 → source_cache 过滤 → 验证 → iptv_list（"活源池"）
+## 三、流程 B：扫描配置 → source_cache 过滤 → 验证 → hosts（"活源池"）
 
 ### 目的
 根据扫描配置的地区条件，从 source_cache 中筛选候选 host，验证流可用性，有效源写入活源池。
@@ -108,11 +108,11 @@
 
 例如：templateRegion="北京" → 只取 source_cache 中 geoRegion="北京" 的 host 进行验证。
 
-### 详细流程（以扫描北京组播源为例）
+### 详细流程（以扫描北京主机为例）
 
 ```
 用户操作: 创建扫描配置
-  name = "北京组播源"
+  name = "北京主机"
   templateRegion = "北京"              ← 地区筛选条件
   templateOperator = ""                ← 运营商筛选（可选）
   templateTargetName = "CCTV-1"        ← 频道名称
@@ -153,9 +153,9 @@
         │                                  │
         ▼                                  │
   ⑤ 去重：排除已在活源池的 host              │
-     get_existing_iptv_hosts_batch()        │
+     get_existing_hosts_batch()             │
      = SELECT DISTINCT host                 │
-       FROM iptv_list                       │
+       FROM hosts                           │
        WHERE host IN (...)                  │
      → 已存在的 host 跳过验证                │
         │                                  │
@@ -185,12 +185,12 @@
   ⑨ 过滤 geo 为空的 host                     │
      enriched = [item for item              │
        if item.get("geoRegion")]            │
-     → geo 为空的不写入 iptv_list            │
+     → geo 为空的不写入 hosts            │
         │                                  │
         ▼                                  │
   ⑩ 写入活源池                              │
-     _batch_insert_iptv(batch_rows)         │
-     INSERT INTO iptv_list (                │
+     _batch_insert_hosts(batch_rows)        │
+     INSERT INTO hosts (                    │
        host, ip, port,                      │
        sourceType, sourceName,              │
        region="北京",      ← 溯源：筛选条件  │
@@ -213,7 +213,7 @@
 - **region vs geoRegion**：region 是配置模板值（溯源信息），geoRegion 是 ip2region 实查值（属性信息）
 - **verify_single_host 已验证流可用性**，所以 enrich_geo_batch 跳过 health_check
 - **ON CONFLICT 更新**：同一 host+target+channelName 重复入库时，只更新 delay/updateTime/geo
-- **去重优先**：已在 iptv_list 的 host 直接跳过，避免重复验证
+- **去重优先**：已在 hosts 的 host 直接跳过，避免重复验证
 - **配置间延迟**：扫描完一个配置后等待 config_delay 秒再继续下一个
 - **队列机制**：扫描配置是队列任务，同一时间只执行一个配置。正在运行的任务完成后可再次被加入队列
 
@@ -264,8 +264,8 @@ trigger_background_queue([1, 2, 3])
 cron 触发复测
         │
         ▼
-  ① 读取 iptv_list 所有记录
-     SELECT id, host, target, protocol FROM iptv_list
+  ① 读取 hosts 所有记录
+     SELECT id, host, target, protocol FROM hosts
         │
         ▼
   ② 并发验证（与扫描引擎相同的 verify_single_host）
@@ -279,7 +279,7 @@ cron 触发复测
         │
         ▼
   ④ 淘汰处理
-     ├─ DELETE FROM iptv_list WHERE id=?
+     ├─ DELETE FROM hosts WHERE id=?
      └─ DELETE FROM source_cache WHERE host=?
          （同步清理缓存，防止下次扫描再次命中）
 ```
@@ -384,7 +384,7 @@ fetch_subscription(name, uid, url)
 |------|-----------|----------|
 | 扫描 | `settings.scan_cron` | 匹配时，取所有 enabled=1 的 scan_config，加入扫描队列 |
 | 复测 | `settings.janitor_cron` | 匹配且扫描空闲时，启动 `execute_recheck()` |
-| 订阅拉取 | `api_subscriptions.fetchCron` | 每个订阅独立匹配，并发拉取 |
+| 订阅拉取 | `subscriptions.fetchCron` | 每个订阅独立匹配，并发拉取 |
 
 ### cron 表达式格式
 
@@ -419,9 +419,9 @@ fetch_subscription(name, uid, url)
 | `/api/subscriptions/{id}` | DELETE | Token | 删除订阅 |
 | `/api/subscriptions/{id}/fetch` | POST | Token | 手动拉取订阅 |
 | `/api/subscriptions/fetch-all` | POST | Token | 批量拉取订阅 |
-| `/api/iptv-pool` | GET | Token | 查询活源池（分页+筛选） |
-| `/api/iptv/{id}/test-delay` | POST | Token | 测试单个源延迟 |
-| `/api/iptv/{id}` | DELETE | Token | 删除单个源 |
+| `/api/hosts` | GET | Token | 查询活源池（分页+筛选） |
+| `/api/hosts/{id}/test-delay` | POST | Token | 测试单个源延迟 |
+| `/api/hosts/{id}` | DELETE | Token | 删除单个源 |
 | `/api/source-cache/list` | GET | 无 | 列出缓存数据（分页） |
 | `/api/source-cache/delete` | POST | 无 | 删除缓存数据 |
 | `/api/source/push` | POST | API Key | 外部推送 host |
@@ -442,10 +442,10 @@ fetch_subscription(name, uid, url)
 4. IP 属于中国内地（ip2region countryCode=CN 且省份在 MAINLAND_REGIONS 中）
 5. geoRegion 不为空且在 MAINLAND_REGIONS 中（cache_sources 兜底过滤）
 
-### host 进入 iptv_list 的条件（全部满足）
+### host 进入 hosts 的条件（全部满足）
 
 1. 在 source_cache 中存在且 geoRegion 匹配 templateRegion
-2. 不在 iptv_list 中（去重）
+2. 不在 hosts 中（去重）
 3. verify_single_host 验证通过（流可用）
 4. geoRegion 不为空（DNS 解析失败或 geo 查询失败的过滤掉）
 
@@ -467,7 +467,5 @@ docker compose up --build
 
 | 变量 | 默认值 | 用途 |
 |------|--------|------|
-| `DB_PATH` | `udpxy_scanner.db` | 主数据库路径 |
-| `CACHE_DB_PATH` | `source_cache.db` | 缓存数据库路径 |
-| `IPTV_DB_PATH` | `iptv_list.db` | 活源池数据库路径 |
+| `DB_PATH` | `data.db` | 数据库路径（全部表） |
 | `UDPXY_SCANNER_PASSWORD` | `admin` | 默认登录密码 |

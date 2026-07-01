@@ -288,7 +288,7 @@ onMounted(() => {
 
 .page-title {
   flex: 1;
-  text-align: center;
+  text-align: left;
   font-size: 18px;
   font-weight: 700;
   margin: 0;

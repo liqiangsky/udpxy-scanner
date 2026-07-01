@@ -31,14 +31,14 @@ ENV PYTHONPATH=/app/server
 ENV PYTHONUNBUFFERED=1
 
 # 数据目录
-ENV DB_PATH=/app/data/udpxy_scanner.db
-ENV CACHE_DB_PATH=/app/data/source_cache.db
-ENV IPTV_DB_PATH=/app/data/iptv_list.db
+ENV DB_PATH=/app/data/data.db
 
 RUN mkdir -p /app/data
+
+# entrypoint（已包含在 server/scripts/ 中自动迁移）
+RUN chmod +x /app/server/scripts/entrypoint.sh
 
 # HF Spaces 默认端口 7860
 EXPOSE 7860
 
-# 启动 uvicorn
-CMD uvicorn main:app --host 0.0.0.0 --port 7860
+ENTRYPOINT ["/app/server/scripts/entrypoint.sh"]

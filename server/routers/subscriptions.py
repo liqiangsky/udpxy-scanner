@@ -2,8 +2,9 @@
 import logging
 import threading
 import asyncio
+import time
 from fastapi import APIRouter, HTTPException
-from db.database import get_db, get_cache_db
+from db.database import get_db
 from db.models import ApiSubscriptionCreate
 from services.source_cache import process_source_data
 from services.subscription_fetcher import fetch_subscription
@@ -17,7 +18,7 @@ def api_list_subscriptions():
     """获取所有 API 订阅"""
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT * FROM api_subscriptions ORDER BY id"
+            "SELECT * FROM subscription ORDER BY id"
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -28,7 +29,7 @@ def api_create_subscription(data: ApiSubscriptionCreate):
     with get_db() as conn:
         try:
             conn.execute(
-                "INSERT INTO api_subscriptions (name, uid, url, enabled, fetchCron) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO subscription (name, uid, url, enabled, fetchCron) VALUES (?, ?, ?, ?, ?)",
                 (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron)
             )
             sub_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -41,20 +42,20 @@ def api_create_subscription(data: ApiSubscriptionCreate):
 def api_update_subscription(sub_id: int, data: ApiSubscriptionCreate):
     """更新 API 订阅"""
     with get_db() as conn:
-        row = conn.execute("SELECT id FROM api_subscriptions WHERE id=?", (sub_id,)).fetchone()
+        row = conn.execute("SELECT id FROM subscription WHERE id=?", (sub_id,)).fetchone()
         if not row:
             raise HTTPException(404, "订阅不存在")
-        old = conn.execute("SELECT uid FROM api_subscriptions WHERE id=?", (sub_id,)).fetchone()
+        old = conn.execute("SELECT uid FROM subscription WHERE id=?", (sub_id,)).fetchone()
         old_uid = old["uid"]
         conn.execute(
-            "UPDATE api_subscriptions SET name=?, uid=?, url=?, enabled=?, fetchCron=?, updatedAt=datetime('now') WHERE id=?",
-            (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron, sub_id)
+            "UPDATE subscription SET name=?, uid=?, url=?, enabled=?, fetchCron=?, updatedAt=? WHERE id=?",
+            (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron, int(time.time()), sub_id)
         )
-        # uid 变更时同步更新 source_cache 中的 sourceType
+        # uid 变更时同步更新 cache 中的 sourceType
         if old_uid != data.uid:
-            with get_cache_db() as cconn:
+            with get_db() as cconn:
                 cconn.execute(
-                    "UPDATE source_cache SET sourceType=? WHERE sourceType=?",
+                    "UPDATE cache SET sourceType=? WHERE sourceType=?",
                     (data.uid, old_uid)
                 )
     return {"ok": True}
@@ -62,15 +63,15 @@ def api_update_subscription(sub_id: int, data: ApiSubscriptionCreate):
 
 @router.delete("/subscriptions/{sub_id}")
 def api_delete_subscription(sub_id: int):
-    """删除 API 订阅并清除对应的 source_cache"""
+    """删除 API 订阅并清除对应的 cache"""
     with get_db() as conn:
-        row = conn.execute("SELECT uid FROM api_subscriptions WHERE id=?", (sub_id,)).fetchone()
+        row = conn.execute("SELECT uid FROM subscription WHERE id=?", (sub_id,)).fetchone()
         if not row:
             raise HTTPException(404, "订阅不存在")
         uid = row["uid"]
-        conn.execute("DELETE FROM api_subscriptions WHERE id=?", (sub_id,))
-    with get_cache_db() as conn:
-        conn.execute("DELETE FROM source_cache WHERE sourceType=?", (uid,))
+        conn.execute("DELETE FROM subscription WHERE id=?", (sub_id,))
+    with get_db() as conn:
+        conn.execute("DELETE FROM cache WHERE sourceType=?", (uid,))
     logger.info(f"🗑️ [订阅删除] uid={uid}")
     return {"ok": True}
 
@@ -80,7 +81,7 @@ def api_fetch_subscription(sub_id: int):
     """手动触发单个订阅拉取，后台异步执行"""
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM api_subscriptions WHERE id=? AND enabled=1",
+            "SELECT * FROM subscription WHERE id=? AND enabled=1",
             (sub_id,)
         ).fetchone()
     if not row:
@@ -95,11 +96,10 @@ def api_fetch_subscription(sub_id: int):
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
                 await process_source_data(sub_info["uid"], hosts_data)
-            from datetime import datetime
             with get_db() as conn:
                 conn.execute(
-                    "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
-                    (datetime.now().isoformat(), sub_info["id"])
+                    "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                    (int(time.time()), sub_info["id"])
                 )
             logger.info(f"✅ 订阅 {sub_info['name']} 拉取完成")
         # Python 3.10+ 中 asyncio.run() 可安全地从非主线程调用（自动创建新事件循环）
@@ -114,7 +114,7 @@ async def api_fetch_all_subscriptions():
     """手动触发所有已启用订阅拉取"""
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT * FROM api_subscriptions WHERE enabled=1"
+            "SELECT * FROM subscription WHERE enabled=1"
         ).fetchall()
 
     async def _fetch_one(row):
@@ -133,12 +133,11 @@ async def api_fetch_all_subscriptions():
     results = await asyncio.gather(*(_fetch_one(dict(r)) for r in rows))
     results = list(results)
 
-    from datetime import datetime
-    now = datetime.now().isoformat()
+    now = int(time.time())
     with get_db() as conn:
         for row in rows:
             conn.execute(
-                "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
+                "UPDATE subscription SET lastFetchAt=? WHERE id=?",
                 (now, row["id"])
             )
 

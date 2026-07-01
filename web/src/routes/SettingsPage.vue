@@ -51,6 +51,16 @@
         <p class="field-desc">扫描引擎参数、自动化调度、推送 API Key</p>
       </div>
 
+      <!-- 游离主机入口 -->
+      <div class="settings-card entry-card" @click="$router.push('/settings/orphans')">
+        <div class="card-title-group">
+          <span class="material-symbols-outlined card-icon" style="color: var(--color-orange)">broadcast_on_personal</span>
+          <h2>游离主机</h2>
+          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-orange)">chevron_right</span>
+        </div>
+        <p class="field-desc">管理已不在主机池中的缓存主机</p>
+      </div>
+
       <!-- 后台日志入口 -->
       <div class="settings-card entry-card" @click="$router.push('/logs')">
         <div class="card-title-group">

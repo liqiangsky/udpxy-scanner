@@ -4,9 +4,7 @@ import time
 import threading
 from contextlib import contextmanager
 
-DB_PATH = os.getenv("DB_PATH", "udpxy_scanner.db")
-CACHE_DB_PATH = os.getenv("CACHE_DB_PATH", "source_cache.db")
-IPTV_DB_PATH = os.getenv("IPTV_DB_PATH", "iptv_list.db")
+DB_PATH = os.getenv("DB_PATH", "data.db")
 
 _settings_cache = {}
 _settings_cache_ttl = 30
@@ -41,36 +39,67 @@ def _get_persistent_conn(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def init_cache_db():
-    """初始化源缓存数据库（source_cache 表）"""
-    os.makedirs(os.path.dirname(CACHE_DB_PATH) or ".", exist_ok=True)
-    conn = sqlite3.connect(CACHE_DB_PATH)
+def init_db():
+    """初始化数据库（全部表都在 data.db 中）"""
+    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+
+    # 高并发优化
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA cache_size=-64000")
+
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS source_cache (
+        CREATE TABLE IF NOT EXISTS parameter (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            dataSource TEXT NOT NULL,
+            templateRegion TEXT DEFAULT '',
+            templateOperator TEXT DEFAULT '',
+            templateTargetName TEXT DEFAULT '',
+            templateTargetAddress TEXT DEFAULT '',
+            enabled INTEGER DEFAULT 1,
+            createdAt INTEGER DEFAULT 0,
+            updatedAt INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_config_enabled ON config(enabled);
+
+        CREATE TABLE IF NOT EXISTS subscription (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            uid TEXT NOT NULL UNIQUE,
+            url TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            fetchCron TEXT DEFAULT '',
+            lastFetchAt INTEGER DEFAULT NULL,
+            createdAt INTEGER DEFAULT 0,
+            updatedAt INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_subscription_enabled_cron ON subscription(enabled, fetchCron);
+
+        CREATE TABLE IF NOT EXISTS cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sourceType TEXT NOT NULL,
             host TEXT NOT NULL,
             geoRegion TEXT DEFAULT '',
             geoOperator TEXT DEFAULT '',
-            createdAt TEXT DEFAULT (datetime('now'))
+            active INTEGER DEFAULT 0,
+            status INTEGER DEFAULT 0,
+            createdAt INTEGER DEFAULT 0,
+            updatedAt INTEGER DEFAULT NULL
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_source_cache_unique ON source_cache(host);
-        CREATE INDEX IF NOT EXISTS idx_source_cache_sourceType ON source_cache(sourceType);
-    """)
-    conn.commit()
-    conn.close()
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_cache_unique ON cache(host);
+        CREATE INDEX IF NOT EXISTS idx_cache_sourceType ON cache(sourceType);
 
-
-def init_iptv_db():
-    """初始化活源池数据库（iptv_list 表）"""
-    os.makedirs(os.path.dirname(IPTV_DB_PATH) or ".", exist_ok=True)
-    conn = sqlite3.connect(IPTV_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS iptv_list (
+        CREATE TABLE IF NOT EXISTS host (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             host TEXT NOT NULL,
             ip TEXT NOT NULL,
@@ -85,71 +114,21 @@ def init_iptv_db():
             protocol TEXT NOT NULL,
             target TEXT NOT NULL,
             channelName TEXT NOT NULL,
-            createTime INTEGER NOT NULL,
-            updateTime INTEGER NOT NULL
+            createdAt INTEGER NOT NULL,
+            updatedAt INTEGER NOT NULL
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_iptv_unique ON iptv_list(host, target, channelName);
-        CREATE INDEX IF NOT EXISTS idx_region_operator ON iptv_list(region, operator);
-        CREATE INDEX IF NOT EXISTS idx_geo ON iptv_list(geoRegion, geoOperator);
-        CREATE INDEX IF NOT EXISTS idx_iptv_host ON iptv_list(host);
-        CREATE INDEX IF NOT EXISTS idx_iptv_sourceType ON iptv_list(sourceType);
-        CREATE INDEX IF NOT EXISTS idx_iptv_geoRegion ON iptv_list(geoRegion);
-        CREATE INDEX IF NOT EXISTS idx_iptv_geoOperator ON iptv_list(geoOperator);
-    """)
-    conn.commit()
-    conn.close()
-
-
-def init_db():
-    """初始化主数据库（settings + scan_config + templates + sessions）"""
-    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-
-    # 高并发优化
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA temp_store=MEMORY")
-    conn.execute("PRAGMA cache_size=-64000")
-
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS scan_config (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            dataSource TEXT NOT NULL,
-            templateRegion TEXT DEFAULT '',
-            templateOperator TEXT DEFAULT '',
-            templateTargetName TEXT DEFAULT '',
-            templateTargetAddress TEXT DEFAULT '',
-            enabled INTEGER DEFAULT 1,
-            createdAt TEXT DEFAULT (datetime('now')),
-            updatedAt TEXT DEFAULT (datetime('now'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_scan_config_enabled ON scan_config(enabled);
-
-        CREATE TABLE IF NOT EXISTS api_subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            uid TEXT NOT NULL UNIQUE,
-            url TEXT NOT NULL,
-            enabled INTEGER DEFAULT 1,
-            fetchCron TEXT DEFAULT '',
-            lastFetchAt TEXT DEFAULT NULL,
-            createdAt TEXT DEFAULT (datetime('now')),
-            updatedAt TEXT DEFAULT (datetime('now'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_sub_enabled_cron ON api_subscriptions(enabled, fetchCron);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_host_unique ON host(host, target, channelName);
+        CREATE INDEX IF NOT EXISTS idx_host_region_operator ON host(region, operator);
+        CREATE INDEX IF NOT EXISTS idx_host_geo ON host(geoRegion, geoOperator);
+        CREATE INDEX IF NOT EXISTS idx_host_host ON host(host);
+        CREATE INDEX IF NOT EXISTS idx_host_sourceType ON host(sourceType);
+        CREATE INDEX IF NOT EXISTS idx_host_geoRegion ON host(geoRegion);
+        CREATE INDEX IF NOT EXISTS idx_host_geoOperator ON host(geoOperator);
     """)
 
     # 初始化默认密码
     row = conn.execute(
-        "SELECT value FROM settings WHERE key='password_hash'"
+        "SELECT value FROM parameter WHERE key='password_hash'"
     ).fetchone()
 
     if not row:
@@ -163,7 +142,7 @@ def init_db():
         ).hex()
 
         conn.execute(
-            "INSERT INTO settings (key, value) VALUES ('password_hash', ?)",
+            "INSERT INTO parameter (key, value) VALUES ('password_hash', ?)",
             (default_hash,)
         )
 
@@ -179,7 +158,7 @@ def init_db():
 
     for k, v in default_settings.items():
         conn.execute(
-            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO parameter (key, value) VALUES (?, ?)",
             (k, v)
         )
 
@@ -189,32 +168,8 @@ def init_db():
 
 @contextmanager
 def get_db():
-    """主数据库连接管理（线程级持久连接）"""
+    """数据库连接管理（全部表共用 data.db，线程级持久连接）"""
     conn = _get_persistent_conn(DB_PATH)
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-
-
-@contextmanager
-def get_cache_db():
-    """缓存数据库连接管理（source_cache 表，线程级持久连接）"""
-    conn = _get_persistent_conn(CACHE_DB_PATH)
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-
-
-@contextmanager
-def get_iptv_db():
-    """活源池数据库连接管理（iptv_list 表，线程级持久连接）"""
-    conn = _get_persistent_conn(IPTV_DB_PATH)
     try:
         yield conn
         conn.commit()
@@ -232,7 +187,7 @@ def get_setting(key: str, default: str) -> str:
     try:
         with get_db() as conn:
             row = conn.execute(
-                "SELECT value FROM settings WHERE key=?",
+                "SELECT value FROM parameter WHERE key=?",
                 (key,)
             ).fetchone()
             val = row["value"] if row else default

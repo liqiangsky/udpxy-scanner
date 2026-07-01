@@ -1,22 +1,19 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">主机</h1>
+      <button class="back-btn" @click="$router.back()">
+        <span class="material-symbols-outlined">arrow_back</span>
+      </button>
+      <h1 class="page-title">游离主机</h1>
       <div class="header-right">
         <div class="filter-counter-top">
-          <span>{{ totalCount }}</span> 个可用
+          <span>{{ totalCount }}</span> 个
         </div>
         <div class="header-filters">
           <div class="select-wrapper-inline">
-            <select v-model="filterForm.region" class="apple-select-sm">
+            <select v-model="filterForm.geoRegion" class="apple-select-sm">
               <option value="">全部地区</option>
               <option v-for="opt in regions" :key="opt" :value="opt">{{ opt }}</option>
-            </select>
-          </div>
-          <div class="select-wrapper-inline">
-            <select v-model="filterForm.operator" class="apple-select-sm">
-              <option value="">全部网络</option>
-              <option v-for="opt in operators" :key="opt" :value="opt">{{ opt }}</option>
             </select>
           </div>
         </div>
@@ -34,23 +31,23 @@
       </div>
       <template v-else>
         <div
-          v-for="source in displayList"
-          :key="source.id"
+          v-for="item in dataList"
+          :key="item.id"
           class="hosts-grid-card"
-          :class="{ 'card-selected': selection.has(source.id) }"
-          @pointerdown="onPointerDown($event, source)"
+          :class="{ 'card-selected': selection.has(item.id) }"
+          @pointerdown="onPointerDown($event, item)"
           @pointerup="onPointerUp"
           @pointerleave="onPointerUp"
           @contextmenu.prevent
-          @click="onCardClick(source)"
+          @click="onCardClick(item)"
         >
           <div class="section-host">
-            <div class="host-ip font-mono">{{ source.host }}</div>
+            <div class="host-ip font-mono">{{ item.host }}</div>
             <div class="host-actions">
-              <button v-if="authStore.isLoggedIn" class="action-btn delete-btn" @click.stop="handleDelete(source)">
+              <button class="action-btn delete-btn" @click.stop="handleSingleDelete(item)">
                 <span class="material-symbols-outlined icon-g">delete</span>
               </button>
-              <button class="copy-btn" @click.stop="handleCopy(source.host)">
+              <button class="copy-btn" @click.stop="handleCopy(item.host)">
                 <span class="material-symbols-outlined icon-g">content_copy</span>
               </button>
             </div>
@@ -59,75 +56,107 @@
           <div class="section-metrics-grid">
             <div class="grid-item">
               <span class="badge-lbl">地区</span>
-              <span class="badge-txt color-blue">{{ source.region }}</span>
+              <span class="badge-txt color-blue">{{ item.geoRegion || '未知' }}</span>
             </div>
             <div class="grid-item">
               <span class="badge-lbl">运营商</span>
-              <span class="badge-txt color-blue">{{ source.operator }}</span>
+              <span class="badge-txt color-blue">{{ item.geoOperator || '未知' }}</span>
             </div>
             <div class="grid-item">
               <span class="badge-lbl">状态</span>
               <div
                 class="delay-interactive-badge"
-                :class="{ 'state-error': source.delay < 0 }"
-                @click.stop="handleTestDelay(source)"
+                :class="{ 'state-error': item._online === false, 'state-checking': item._checking }"
+                @click.stop="handleCheckOnline(item)"
               >
-                <span class="material-symbols-outlined icon-g">bolt</span>
-                <span class="badge-txt font-mono">{{ source.delay }} ms</span>
+                <span v-if="item._checking" class="material-symbols-outlined icon-g spinning"
+                  >sync</span
+                >
+                <span v-else-if="item._online === true" class="material-symbols-outlined icon-g"
+                  >check_circle</span
+                >
+                <span v-else-if="item._online === false" class="material-symbols-outlined icon-g"
+                  >cancel</span
+                >
+                <span v-else class="material-symbols-outlined icon-g">travel_explore</span>
+                <span class="badge-txt font-mono">
+                  {{
+                    item._checking
+                      ? '检测中'
+                      : item._online === true
+                        ? '在线'
+                        : item._online === false
+                          ? '离线'
+                          : '检测'
+                  }}
+                </span>
               </div>
             </div>
             <div class="grid-item">
               <span class="badge-lbl">来源</span>
-              <span class="badge-txt">{{ source.sourceName }}</span>
+              <span class="badge-txt">{{ item.sourceType }}</span>
             </div>
             <div class="grid-item time-column full-width">
               <span class="badge-lbl">发现</span>
               <div class="time-wrapper">
-                <span class="material-symbols-outlined icon-g">history</span>
-                <span class="badge-txt color-gray font-mono">{{ formatTime(source.createdAt) }}</span>
+                <span class="material-symbols-outlined icon-g">calendar_today</span>
+                <span class="badge-txt color-gray font-mono">{{ formatTime(item.createdAt) }}</span>
               </div>
             </div>
             <div class="grid-item time-column full-width">
               <span class="badge-lbl">验证</span>
               <div class="time-wrapper">
-                <span class="material-symbols-outlined icon-g">update</span>
-                <span class="badge-txt color-gray font-mono">{{ formatTime(source.updatedAt) }}</span>
+                <span class="material-symbols-outlined icon-g">schedule</span>
+                <span class="badge-txt color-gray font-mono">{{
+                  formatTime(item.updatedAt)
+                }}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div v-show="displayList.length < totalCount" class="load-more-wrap">
-          <button class="load-more-btn" :class="{ 'loading': loadingMore }" :disabled="loadingMore" @click="loadMore">
-            <span v-if="loadingMore" class="material-symbols-outlined spinner-icon spinning">sync</span>
-            加载更多（剩余 {{ totalCount - displayList.length }} 条）
+        <div v-show="dataList.length < totalCount" class="load-more-wrap">
+          <button
+            class="load-more-btn"
+            :class="{ loading: loadingMore }"
+            :disabled="loadingMore"
+            @click="loadMore"
+          >
+            <span v-if="loadingMore" class="material-symbols-outlined spinner-icon spinning"
+              >sync</span
+            >
+            加载更多（剩余 {{ totalCount - dataList.length }} 条）
           </button>
         </div>
-
-        <div
-          v-if="displayList.length >= totalCount"
-          class="all-loaded-hint"
-        >
+        <div v-if="dataList.length >= totalCount" class="all-loaded-hint">
           已加载全部 {{ totalCount }} 条
         </div>
+        <div v-if="!loading && totalCount === 0" class="empty-state">
+          <p>暂无游离主机</p>
+        </div>
       </template>
-
-      <div v-if="!loading && totalCount === 0" class="empty-state">
-        <p>暂无符合当前筛选条件的主机</p>
-      </div>
     </div>
 
-    <!-- 批量操作栏（替换底部 tabbar） -->
+    <!-- 批量操作栏 -->
     <Transition name="batch-bar">
       <div v-if="selectMode" class="batch-tabbar">
         <button class="batch-tab-item" @click="selectAll">
           <span class="material-symbols-outlined batch-tab-icon">
-            {{ displayList.length > 0 && displayList.every(s => selection.has(s.id)) ? 'deselect' : 'select_all' }}
+            {{
+              dataList.length > 0 && dataList.every((s) => selection.has(s.id))
+                ? 'deselect'
+                : 'select_all'
+            }}
           </span>
           <span class="batch-tab-text">全选</span>
         </button>
         <div class="batch-tab-divider"></div>
-        <button class="batch-tab-item" :class="{ disabled: selection.size === 0 }" :disabled="selection.size === 0" @click="handleBatchDelete">
+        <button
+          class="batch-tab-item"
+          :class="{ disabled: selection.size === 0 }"
+          :disabled="selection.size === 0"
+          @click="handleBatchDelete"
+        >
           <span class="material-symbols-outlined batch-tab-icon delete-color">delete</span>
           <span class="batch-tab-text delete-color">删除</span>
         </button>
@@ -142,29 +171,20 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import request from '@/api'
-import { regions, operators } from '@/data.js'
 import { toast } from '@/components/Toast'
-import { useAuthStore } from '@/stores/auth'
 import { batchSelectActive, formatTime } from '@/shared'
+import { regions } from '@/data.js'
 
-const authStore = useAuthStore()
-
-const filterForm = reactive({
-  region: '',
-  operator: '',
-})
-
-const rawHostsList = ref([])
+const filterForm = reactive({ geoRegion: '' })
 const loading = ref(false)
 const loadingMore = ref(false)
-
-// 分页渲染控制
-const PAGE_SIZE = 20
-const currentPage = ref(1)
+const dataList = ref([])
 const totalCount = ref(0)
+const currentPage = ref(1)
 const totalPages = ref(0)
+const PAGE_SIZE = 20
 
 // 批量选择
 const LONG_PRESS_MS = 500
@@ -193,7 +213,7 @@ const toggleSelect = (item) => {
   }
 }
 const selectAll = () => {
-  const allIds = displayList.value.map((s) => s.id)
+  const allIds = dataList.value.map((s) => s.id)
   const allSelected = allIds.length > 0 && allIds.every((id) => selection.has(id))
   if (allSelected) {
     allIds.forEach((id) => selection.delete(id))
@@ -226,82 +246,24 @@ const onCardClick = (item) => {
     toggleSelect(item)
   }
 }
-const handleBatchDelete = async () => {
-  if (selection.size === 0) return
-  const confirmed = confirm(`确定要删除选中的 ${selection.size} 个主机吗？\n\n此操作不可恢复。`)
-  if (!confirmed) return
 
-  const ids = [...selection]
+const handleCheckOnline = async (item) => {
+  if (item._checking) return
+  item._checking = true
+  item._online = undefined
   try {
-    const res = await request.post('/hosts/batch-delete', { ids })
-    if (res.ok) {
-      const deletedCount = res.success?.length || 0
-      if (deletedCount > 0) {
-        toast.success(`成功删除 ${deletedCount} 个主机`)
-        rawHostsList.value = rawHostsList.value.filter((i) => !ids.includes(i.id))
-      }
-      if (res.failed?.length > 0) {
-        toast.warning(`${res.failed.length} 个删除失败`)
-      }
-    } else {
-      toast.error(res.error || '批量删除失败')
-    }
+    const res = await request.post(`/source-cache/${item.id}/check-online`)
+    item._online = res.online
+    item.status = res.status
+    item.updatedAt = res.updatedAt
+    toast.success(res.online ? '在线' : '离线')
   } catch {
-    /* 错误由拦截器统一提示 */
-  }
-  exitSelectMode()
-}
-
-const loadPool = async (reset = false) => {
-  if (reset) {
-    currentPage.value = 1
-    rawHostsList.value = []
-    loading.value = true
-  } else {
-    loadingMore.value = true
-    await nextTick()
-  }
-  try {
-    const params = { page: currentPage.value, page_size: PAGE_SIZE }
-    if (filterForm.region) params.region = filterForm.region
-    if (filterForm.operator) params.operator = filterForm.operator
-
-    const res = await request.get('/hosts', { params })
-    const items = res.items || []
-
-    if (reset) {
-      rawHostsList.value = items
-    } else {
-      rawHostsList.value.push(...items)
-    }
-
-    totalCount.value = res.total
-    totalPages.value = res.totalPages
-  } catch (e) {
-    console.error('加载主机池失败:', e)
+    item._online = false
+    toast.warning('检测失败')
   } finally {
-    loading.value = false
-    loadingMore.value = false
+    item._checking = false
   }
 }
-
-const displayList = computed(() => rawHostsList.value)
-
-const loadMore = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++
-    loadPool()
-  }
-}
-
-// 筛选变化时重置分页并退出选择模式
-watch(
-  () => ({ region: filterForm.region, operator: filterForm.operator }),
-  () => {
-    loadPool(true)
-    exitSelectMode()
-  },
-)
 
 const handleCopy = async (host) => {
   try {
@@ -312,39 +274,14 @@ const handleCopy = async (host) => {
   }
 }
 
-const handleTestDelay = async (item) => {
-  if (!authStore.isLoggedIn) {
-    return
-  }
+const handleSingleDelete = async (item) => {
+  const confirmed = confirm(`确定要删除游离主机 ${item.host} 吗？\n\n此操作不可恢复。`)
+  if (!confirmed) return
   try {
-    const res = await request.post(`/hosts/${item.id}/test-delay`)
-    if (res.ok) {
-      item.delay = res.delay
-      toast.success(`延迟: ${res.delay}ms`)
-    } else {
-      item.delay = -1
-      toast.warning('超时或不可达')
-    }
-  } catch {
-    item.delay = -1
-  }
-}
-
-const handleDelete = async (item) => {
-  if (!authStore.isLoggedIn) {
-    return
-  }
-  const confirmed = confirm(`确定要删除主机 ${item.host} 吗？\n\n此操作不可恢复。`)
-  if (!confirmed) {
-    return
-  }
-  try {
-    const res = await request.delete(`/hosts/${item.id}`)
+    const res = await request.post('/source-cache/delete', { ids: [item.id] })
     if (res.ok) {
       toast.success('删除成功')
-      // 从列表中移除
-      rawHostsList.value = rawHostsList.value.filter((i) => i.id !== item.id)
-      // 同步清理选择集
+      dataList.value = dataList.value.filter((i) => i.id !== item.id)
       selection.delete(item.id)
     } else {
       toast.error(res.error || '删除失败')
@@ -354,8 +291,79 @@ const handleDelete = async (item) => {
   }
 }
 
+const handleBatchDelete = async () => {
+  if (selection.size === 0) return
+  const confirmed = confirm(`确定要删除选中的 ${selection.size} 个游离主机吗？\n\n此操作不可恢复。`)
+  if (!confirmed) return
+
+  const ids = [...selection]
+  try {
+    const res = await request.post('/source-cache/delete', { ids })
+    if (res.ok) {
+      toast.success(`成功删除 ${ids.length} 个游离主机`)
+      dataList.value = dataList.value.filter((i) => !ids.includes(i.id))
+    } else {
+      toast.error(res.error || '批量删除失败')
+    }
+  } catch {
+    /* 错误由拦截器统一提示 */
+  }
+  exitSelectMode()
+}
+
+const loadOrphans = async (reset = false) => {
+  if (reset) {
+    currentPage.value = 1
+    dataList.value = []
+    loading.value = true
+  } else {
+    loadingMore.value = true
+    await nextTick()
+  }
+  try {
+    const params = { page: currentPage.value, page_size: PAGE_SIZE }
+    if (filterForm.geoRegion) params.geo_region = filterForm.geoRegion
+    const res = await request.get('/source-cache/orphans', { params })
+    if (res.items) {
+      if (reset) {
+        dataList.value = res.items
+      } else {
+        dataList.value.push(...res.items)
+      }
+      // 将服务端 status 字段映射为前端 _online
+      dataList.value.forEach((item) => {
+        if (item.status === 1) item._online = true
+        else if (item.status === -1) item._online = false
+        else item._online = undefined
+      })
+    }
+    totalCount.value = res.total || 0
+    totalPages.value = res.totalPages || 0
+  } catch {
+    /* 错误由拦截器统一提示 */
+  } finally {
+    loading.value = false
+    loadingMore.value = false
+  }
+}
+
+const loadMore = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+    loadOrphans()
+  }
+}
+
+watch(
+  () => filterForm.geoRegion,
+  () => {
+    loadOrphans(true)
+    exitSelectMode()
+  },
+)
+
 onMounted(() => {
-  loadPool()
+  loadOrphans()
 })
 
 onBeforeUnmount(() => {
@@ -376,48 +384,49 @@ onBeforeUnmount(() => {
   background: rgba(245, 245, 247, 0.92);
   backdrop-filter: blur(20px);
   padding: 12px 16px;
-  min-height: 58px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   max-width: 100vw;
 }
-
 @media (min-width: 768px) {
   .page-header {
     max-width: 720px;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-  .header-right {
-    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
-
 @media (min-width: 1024px) {
   .page-header {
     max-width: 1100px;
   }
-  .header-right {
-    max-width: 1100px;
-  }
 }
-
 @media (min-width: 1440px) {
   .page-header {
     max-width: 1400px;
   }
-  .header-right {
-    max-width: 1400px;
-  }
 }
+
 .page-title {
-  font-size: 22px;
+  flex: 1;
+  text-align: left;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
   white-space: nowrap;
 }
+
+.filter-counter-top {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.filter-counter-top span {
+  color: var(--color-orange);
+  font-weight: 700;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -425,18 +434,12 @@ onBeforeUnmount(() => {
   flex: 1;
   justify-content: flex-end;
 }
-.filter-counter-top {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-.filter-counter-top span {
-  color: var(--color-green);
-  font-weight: 700;
-}
 .header-filters {
   display: flex;
   gap: 8px;
+}
+.select-wrapper-inline {
+  display: inline-flex;
 }
 .apple-select-sm {
   appearance: none;
@@ -487,86 +490,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 批量操作 tabbar */
-.batch-tabbar {
-  position: fixed;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: auto;
-  min-width: 240px;
-  height: 52px;
-  padding: 0 8px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(40px) saturate(180%);
-  border-radius: 20px;
-  box-shadow: var(--shadow-tabbar);
-  border: 1px solid rgba(0, 0, 0, 0.02);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  z-index: 99;
-  margin-bottom: env(safe-area-inset-bottom);
-}
-.batch-tab-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-  transition: all 0.2s ease;
-}
-.batch-tab-item:active {
-  transform: scale(0.92);
-}
-.batch-tab-item.disabled {
-  opacity: 0.3;
-  pointer-events: none;
-}
-.batch-tab-icon {
-  font-size: 22px !important;
-  color: var(--color-blue);
-  font-variation-settings: 'FILL' 0, 'wght' 400;
-}
-.batch-tab-icon.delete-color {
-  color: var(--color-red);
-}
-.batch-tab-icon.cancel-color {
-  color: var(--text-muted);
-}
-.batch-tab-text {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-blue);
-  font-family: var(--font-sans);
-}
-.batch-tab-text.delete-color {
-  color: var(--color-red);
-}
-.batch-tab-text.cancel-color {
-  color: var(--text-muted);
-}
-.batch-tab-divider {
-  width: 1px;
-  height: 24px;
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.batch-bar-enter-active,
-.batch-bar-leave-active {
-  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-.batch-bar-enter-from,
-.batch-bar-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(20px);
-}
-
-/* 卡片样式 */
+/* 卡片 — 与主机页一致 */
 .hosts-grid-card {
   background: var(--bg-card);
   border-radius: var(--radius-card);
@@ -579,8 +503,10 @@ onBeforeUnmount(() => {
   transition: border-color 0.2s ease;
 }
 .hosts-grid-card.card-selected {
-  border-color: var(--color-blue);
-  box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.15), var(--shadow-md);
+  border-color: var(--color-orange);
+  box-shadow:
+    0 0 0 1px rgba(255, 149, 0, 0.15),
+    var(--shadow-md);
 }
 
 .section-host {
@@ -630,7 +556,9 @@ onBeforeUnmount(() => {
   transform: scale(0.9);
   background: #f5d6d3;
 }
-.delete-btn .icon-g { color: #e5484d; }
+.delete-btn .icon-g {
+  color: #e5484d;
+}
 
 .copy-btn {
   background: var(--bg-neutral);
@@ -663,7 +591,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
 }
-.grid-item.full-width { grid-column: span 2; }
+.grid-item.full-width {
+  grid-column: span 2;
+}
 
 .badge-lbl {
   font-size: 11px;
@@ -678,27 +608,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.color-blue { color: var(--color-blue); }
-.color-gray { color: var(--text-secondary); }
-
-.delay-interactive-badge {
-  background: var(--bg-status-good);
-  color: var(--color-green);
-  padding: 3px 8px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.color-blue {
+  color: var(--color-blue);
 }
-.delay-interactive-badge:active { transform: scale(0.95); }
-.delay-interactive-badge.state-error {
-  background: #fdecea;
-  color: #e5484d;
+.color-gray {
+  color: var(--text-secondary);
 }
-.delay-interactive-badge.state-error .icon-g { color: #e5484d; }
-
 .time-wrapper {
   display: flex;
   align-items: center;
@@ -714,10 +629,136 @@ onBeforeUnmount(() => {
     'opsz' 24;
   display: inline-block;
   vertical-align: middle;
+  flex-shrink: 0;
 }
-.copy-btn .icon-g { color: var(--text-muted); }
-.delay-interactive-badge .icon-g { color: var(--color-green); }
-.time-wrapper .icon-g { color: var(--text-muted); }
+.copy-btn .icon-g {
+  color: var(--text-muted);
+}
+.time-wrapper .icon-g {
+  color: var(--text-muted);
+}
+
+/* 状态徽章 — 复用 delay-interactive-badge 样式 */
+.delay-interactive-badge {
+  background: var(--bg-status-good);
+  color: var(--color-green);
+  padding: 3px 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.delay-interactive-badge:active {
+  transform: scale(0.95);
+}
+.delay-interactive-badge .icon-g {
+  color: var(--color-green);
+}
+.delay-interactive-badge.state-error {
+  background: #fdecea;
+  color: #e5484d;
+}
+.delay-interactive-badge.state-error .icon-g {
+  color: #e5484d;
+}
+.delay-interactive-badge.state-checking {
+  background: #e8e8ed;
+  color: var(--text-muted);
+}
+.delay-interactive-badge.state-checking .icon-g {
+  color: var(--text-muted);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* 批量操作栏 */
+.batch-tabbar {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  min-width: 240px;
+  height: 52px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(40px) saturate(180%);
+  border-radius: 20px;
+  box-shadow: var(--shadow-tabbar);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 99;
+  margin-bottom: env(safe-area-inset-bottom);
+}
+.batch-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+.batch-tab-item:active {
+  transform: scale(0.92);
+}
+.batch-tab-item.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.batch-tab-icon {
+  font-size: 22px !important;
+  color: var(--color-orange);
+}
+.batch-tab-icon.delete-color {
+  color: var(--color-red);
+}
+.batch-tab-icon.cancel-color {
+  color: var(--text-muted);
+}
+.batch-tab-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-orange);
+  font-family: var(--font-sans);
+}
+.batch-tab-text.delete-color {
+  color: var(--color-red);
+}
+.batch-tab-text.cancel-color {
+  color: var(--text-muted);
+}
+.batch-tab-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.batch-bar-enter-active,
+.batch-bar-leave-active {
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.batch-bar-enter-from,
+.batch-bar-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
 
 /* 加载更多 */
 .load-more-wrap {
@@ -727,7 +768,7 @@ onBeforeUnmount(() => {
 }
 .load-more-btn {
   background: var(--bg-neutral);
-  color: var(--color-blue);
+  color: var(--color-orange);
   border: none;
   padding: 10px 24px;
   border-radius: var(--radius-input);
@@ -749,11 +790,6 @@ onBeforeUnmount(() => {
   vertical-align: middle;
   margin-right: 4px;
 }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-.spinning { animation: spin 1s linear infinite; }
 .all-loaded-hint {
   grid-column: 1 / -1;
   text-align: center;

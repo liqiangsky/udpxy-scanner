@@ -121,6 +121,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { toast } from '@/components/Toast'
+import { formatTime } from '@/shared'
 import request from '@/api'
 
 const subscriptions = ref([])
@@ -129,14 +130,6 @@ const fetchingMap = ref({})
 const formVisible = ref(false)
 const editingId = ref(null)
 const formData = reactive({ name: '', uid: '', url: '', fetchCron: '' })
-
-const formatTime = (t) => {
-  if (!t) return ''
-  const d = new Date(t)
-  if (isNaN(d)) return t
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
 
 const loadSubscriptions = async () => {
   try {

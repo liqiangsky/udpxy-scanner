@@ -8,7 +8,7 @@ import time
 import asyncio
 import aiohttp
 import logging
-from db.database import get_db, get_cache_db, get_iptv_db, get_setting
+from db.database import get_db, get_setting
 from core.engine import trigger_background_queue, _db_write_lock
 from core.status import task_runner
 from services.source_cache import cache_sources
@@ -76,8 +76,8 @@ async def execute_recheck() -> int:
 
     from services.validator import verify_single_host
 
-    with get_iptv_db() as conn:
-        active_sources = [dict(r) for r in conn.execute("SELECT id, host, target, protocol FROM iptv_list").fetchall()]
+    with get_db() as conn:
+        active_sources = [dict(r) for r in conn.execute("SELECT id, host, target, protocol FROM host").fetchall()]
 
     if not active_sources:
         return 0
@@ -93,7 +93,7 @@ async def execute_recheck() -> int:
             failed_list = []
             success_items = []
             _result_lock = asyncio.Lock()
-            now_ms = int(time.time() * 1000)
+            now_ts = int(time.time())
 
             async def recheck_worker(source):
                 async with concurrency_sem:
@@ -109,7 +109,7 @@ async def execute_recheck() -> int:
 
                     if result:
                         async with _result_lock:
-                            success_items.append((result["delay"], now_ms, result["protocol"], source["id"]))
+                            success_items.append((result["delay"], now_ts, result["protocol"], source["id"]))
                     else:
                         async with _result_lock:
                             failed_list.append(source)
@@ -119,9 +119,9 @@ async def execute_recheck() -> int:
 
             if success_items:
                 with _db_write_lock:
-                    with get_iptv_db() as conn:
+                    with get_db() as conn:
                         conn.executemany(
-                            "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
+                            "UPDATE host SET delay=?, updatedAt=?, protocol=? WHERE id=?",
                             success_items
                         )
 
@@ -133,7 +133,7 @@ async def execute_recheck() -> int:
                 second_success = []
                 second_failed_ids = []
                 second_failed_hosts = []
-                now2_ms = int(time.time() * 1000)
+                now2_ts = int(time.time())
 
                 async def second_recheck(source):
                     async with concurrency_sem:
@@ -149,7 +149,7 @@ async def execute_recheck() -> int:
 
                         if result:
                             async with _result_lock:
-                                second_success.append((result["delay"], now2_ms, result["protocol"], source["id"]))
+                                second_success.append((result["delay"], now2_ts, result["protocol"], source["id"]))
                         else:
                             async with _result_lock:
                                 second_failed_ids.append((source["id"],))
@@ -159,23 +159,23 @@ async def execute_recheck() -> int:
 
                 if second_success:
                     with _db_write_lock:
-                        with get_iptv_db() as conn:
+                        with get_db() as conn:
                             conn.executemany(
-                                "UPDATE iptv_list SET delay=?, updateTime=?, protocol=? WHERE id=?",
+                                "UPDATE host SET delay=?, updatedAt=?, protocol=? WHERE id=?",
                                 second_success
                             )
                     logger.info(f"✅ [二次恢复] {len(second_success)} 个二次复测成功")
 
                 if second_failed_ids:
                     with _db_write_lock:
-                        with get_iptv_db() as conn:
+                        with get_db() as conn:
                             conn.executemany(
-                                "DELETE FROM iptv_list WHERE id=?",
+                                "DELETE FROM host WHERE id=?",
                                 second_failed_ids
                             )
-                        with get_cache_db() as conn:
+                        with get_db() as conn:
                             conn.executemany(
-                                "DELETE FROM source_cache WHERE host=?",
+                                "DELETE FROM cache WHERE host=?",
                                 [(h,) for h in second_failed_hosts]
                             )
                     eliminated = len(second_failed_ids)
@@ -202,7 +202,7 @@ async def handle_heartbeat() -> dict:
     if cron_match(scan_cron, cron_now) and _should_exec("scan", now):
         if task_runner.is_idle():
             with get_db() as conn:
-                rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
+                rows = conn.execute("SELECT id FROM config WHERE enabled=1").fetchall()
             if rows:
                 ids = [r["id"] for r in rows]
                 trigger_background_queue(ids, skip_disabled=True)
@@ -223,8 +223,8 @@ async def handle_heartbeat() -> dict:
 
     # 订阅源定时拉取（并发）
     with get_db() as conn:
-        subscriptions = conn.execute(
-            "SELECT * FROM api_subscriptions WHERE enabled=1 AND fetchCron!=''"
+        subscription = conn.execute(
+            "SELECT * FROM subscription WHERE enabled=1 AND fetchCron!=''"
         ).fetchall()
 
     async def _fetch_and_process(sub_dict):
@@ -240,14 +240,14 @@ async def handle_heartbeat() -> dict:
             await process_source_data(sub_dict["uid"], hosts_data)
         return sub_dict
 
-    sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub)) for sub in subscriptions))
+    sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub)) for sub in subscription))
     for sub_dict in sub_results:
         if sub_dict is None:
             continue
         with get_db() as conn:
             conn.execute(
-                "UPDATE api_subscriptions SET lastFetchAt=? WHERE id=?",
-                (datetime.datetime.now().isoformat(), sub_dict["id"])
+                "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                (int(time.time()), sub_dict["id"])
             )
         triggered.append({"task": f"sub_{sub_dict['id']}", "name": sub_dict["name"]})
 

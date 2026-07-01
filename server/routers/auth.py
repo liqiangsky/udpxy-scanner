@@ -123,7 +123,7 @@ def api_change_password(request: Request, req: ChangePasswordRequest):
         raise HTTPException(400, "新密码至少 4 位")
     new_hash = "pbkdf2$" + hash_password(req.newPassword)
     with get_db() as conn:
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('password_hash', ?)", (new_hash,))
+        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('password_hash', ?)", (new_hash,))
     # 只清除当前用户的 session，其他用户不受影响
     auth_token = request.headers.get("X-Auth-Token", "")
     if auth_token in _sessions:

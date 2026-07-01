@@ -19,23 +19,31 @@ request.interceptors.request.use((config) => {
 })
 
 request.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    const status = error.response?.status
-    if (status === 401) {
-      const authStore = useAuthStore()
-      authStore.clearSession()
-      toast.error('登录已过期，请重新登录')
-      const currentPath = window.location.pathname
-      const redirect = currentPath !== '/login' ? currentPath : ''
-      setTimeout(() => {
-        router.push(redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login')
-      }, 1500)
-      return Promise.reject(error)
+  (response) => {
+    const body = response.data
+    if (body.code !== 200) {
+      if (body.code === 401) {
+        const authStore = useAuthStore()
+        authStore.clearSession()
+        toast.error('登录已过期，请重新登录')
+        const currentPath = window.location.pathname
+        const redirect = currentPath !== '/login' ? currentPath : ''
+        setTimeout(() => {
+          router.push(redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login')
+        }, 1500)
+      } else {
+        toast.error(body.msg || '请求失败')
+        console.error('API 请求失败:', body)
+      }
+      return Promise.reject(body)
     }
-    const msg = error.response?.data?.detail || error.message || '请求失败'
+    return body.data
+  },
+  (error) => {
+    // 网络错误或 HTTP 非 200（理论上不会发生，保底）
+    const msg = error.message || '网络错误'
     toast.error(msg)
-    console.error('API 请求失败:', msg, error)
+    console.error('请求异常:', error)
     return Promise.reject(error)
   },
 )

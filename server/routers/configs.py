@@ -3,7 +3,7 @@ import time
 import asyncio
 import aiohttp
 from fastapi import APIRouter, HTTPException, Query, Request
-from db.database import get_db, get_setting, get_cache_db
+from db.database import get_db, get_setting
 from db.models import ConfigCreateOrUpdate, SourceCacheDelete
 from typing import Optional
 from core.status import task_runner
@@ -18,7 +18,7 @@ def api_list_data_sources():
     """返回已启用的 API 订阅列表"""
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT uid AS value, name AS label FROM api_subscriptions WHERE enabled=1 ORDER BY id"
+            "SELECT uid AS value, name AS label FROM subscription WHERE enabled=1 ORDER BY id"
         ).fetchall()
     return {"sources": [dict(r) for r in rows]}
 
@@ -29,7 +29,7 @@ def _check_data_source_enabled(ds: str):
     with get_db() as conn:
         enabled_uids = [
             r["uid"] for r in conn.execute(
-                "SELECT uid FROM api_subscriptions WHERE enabled=1"
+                "SELECT uid FROM subscription WHERE enabled=1"
             ).fetchall()
         ]
     for name in ds.split(','):
@@ -43,7 +43,7 @@ def _check_data_source_enabled(ds: str):
 @router.get("/configs")
 def api_list_configs():
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM scan_config ORDER BY id DESC").fetchall()
+        rows = conn.execute("SELECT * FROM config ORDER BY id DESC").fetchall()
         return [dict(r) for r in rows]
 
 @router.post("/configs")
@@ -51,7 +51,7 @@ def api_create_config(data: ConfigCreateOrUpdate):
     _check_data_source_enabled(data.dataSource)
     with get_db() as conn:
         cur = conn.execute("""
-            INSERT INTO scan_config (name, dataSource,
+            INSERT INTO config (name, dataSource,
                                      templateRegion, templateOperator, templateTargetName, templateTargetAddress,
                                      enabled)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -60,7 +60,7 @@ def api_create_config(data: ConfigCreateOrUpdate):
             data.region, data.operator, data.targetName, data.targetAddress,
             1 if data.enabled else 0
         ))
-        result = dict(conn.execute("SELECT * FROM scan_config WHERE id=?", (cur.lastrowid,)).fetchone())
+        result = dict(conn.execute("SELECT * FROM config WHERE id=?", (cur.lastrowid,)).fetchone())
     return result
 
 @router.put("/configs/{config_id}")
@@ -68,26 +68,25 @@ def api_update_config(config_id: int, data: ConfigCreateOrUpdate):
     _check_data_source_enabled(data.dataSource)
     with get_db() as conn:
         conn.execute("""
-            UPDATE scan_config SET name=?, dataSource=?,
+            UPDATE config SET name=?, dataSource=?,
                                    templateRegion=?, templateOperator=?, templateTargetName=?, templateTargetAddress=?,
-                                   enabled=?, updatedAt=datetime('now')
-            WHERE id=?
+                                   enabled=?, updatedAt=? WHERE id=?
         """, (
             data.name, data.dataSource,
             data.region, data.operator, data.targetName, data.targetAddress,
-            1 if data.enabled else 0, config_id
+            1 if data.enabled else 0, int(time.time()), config_id
         ))
     return {"ok": True}
 
 @router.delete("/configs/{config_id}")
 def api_delete_config(config_id: int):
-    with get_db() as conn: conn.execute("DELETE FROM scan_config WHERE id=?", (config_id,))
+    with get_db() as conn: conn.execute("DELETE FROM config WHERE id=?", (config_id,))
     return {"ok": True}
 
 @router.post("/configs/{config_id}/run")
 def api_trigger_single_config(config_id: int):
     with get_db() as conn:
-        row = conn.execute("SELECT enabled FROM scan_config WHERE id=?", (config_id,)).fetchone()
+        row = conn.execute("SELECT enabled FROM config WHERE id=?", (config_id,)).fetchone()
         if not row:
             raise HTTPException(404, "配置不存在")
         if row["enabled"] != 1:
@@ -131,13 +130,13 @@ def api_trigger_run_all():
     if task_runner.is_rechecking():
         raise HTTPException(400, "当前正在进行活源复测，请稍后再启动扫描")
     if task_runner.is_idle():
-        with get_db() as conn: rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
+        with get_db() as conn: rows = conn.execute("SELECT id FROM config WHERE enabled=1").fetchall()
         if not rows: raise HTTPException(400, "无可用激活配置")
         ids = [r["id"] for r in rows]
         logger.info(f"▶️ [全部运行] 空闲状态，启动新队列 ids={ids}")
         trigger_background_queue(ids, skip_disabled=True)
     else:
-        with get_db() as conn: rows = conn.execute("SELECT id FROM scan_config WHERE enabled=1").fetchall()
+        with get_db() as conn: rows = conn.execute("SELECT id FROM config WHERE enabled=1").fetchall()
         if not rows: raise HTTPException(400, "无可用激活配置")
         added = []
         for r in rows:
@@ -162,18 +161,18 @@ def api_get_progress():
 
 
 @router.get("/source-cache/list")
-def api_source_cache_list(sourceType: str = Query(None), page: int = Query(1, ge=1), page_size: int = Query(500, ge=1, le=2000)):
+def api_cache_list(sourceType: str = Query(None), page: int = Query(1, ge=1), page_size: int = Query(500, ge=1, le=2000)):
     offset = (page - 1) * page_size
-    with get_cache_db() as conn:
+    with get_db() as conn:
         if sourceType:
-            total = conn.execute("SELECT COUNT(*) AS cnt FROM source_cache WHERE sourceType=?", (sourceType,)).fetchone()["cnt"]
+            total = conn.execute("SELECT COUNT(*) AS cnt FROM cache WHERE sourceType=?", (sourceType,)).fetchone()["cnt"]
             rows = conn.execute(
-                "SELECT * FROM source_cache WHERE sourceType=? ORDER BY id LIMIT ? OFFSET ?",
+                "SELECT * FROM cache WHERE sourceType=? ORDER BY id LIMIT ? OFFSET ?",
                 (sourceType, page_size, offset)
             ).fetchall()
         else:
-            total = conn.execute("SELECT COUNT(*) AS cnt FROM source_cache").fetchone()["cnt"]
-            rows = conn.execute("SELECT * FROM source_cache ORDER BY sourceType, id LIMIT ? OFFSET ?", (page_size, offset)).fetchall()
+            total = conn.execute("SELECT COUNT(*) AS cnt FROM cache").fetchone()["cnt"]
+            rows = conn.execute("SELECT * FROM cache ORDER BY sourceType, id LIMIT ? OFFSET ?", (page_size, offset)).fetchall()
     return {
         "total": total,
         "page": page,
@@ -182,9 +181,75 @@ def api_source_cache_list(sourceType: str = Query(None), page: int = Query(1, ge
     }
 
 
+@router.get("/source-cache/orphans")
+def api_cache_orphans(geo_region: Optional[str] = None, page: int = 1, page_size: int = 20):
+    """获取所有游离主机（active=0），支持 geoRegion 筛选"""
+    where = "active = 0"
+    params = []
+    if geo_region:
+        where += " AND geoRegion = ?"
+        params.append(geo_region)
+
+    if page < 1:
+        page = 1
+    page_size = max(1, min(page_size, 200))
+    offset = (page - 1) * page_size
+
+    with get_db() as conn:
+        total = conn.execute(f"SELECT COUNT(*) AS cnt FROM cache WHERE {where}", params).fetchone()["cnt"]
+        rows = conn.execute(f"SELECT * FROM cache WHERE {where} ORDER BY sourceType, id LIMIT ? OFFSET ?", params + [page_size, offset]).fetchall()
+    return {
+        "items": [dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "totalPages": (total + page_size - 1) // page_size,
+    }
+
+
+@router.post("/source-cache/{cache_id}/check-online")
+async def api_cache_check_online(cache_id: int):
+    """检测游离主机是否在线（udpxy health check）"""
+    with get_db() as conn:
+        row = conn.execute("SELECT host FROM cache WHERE id=?", (cache_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "主机不存在")
+
+    host_val = row["host"]
+    if not host_val.startswith("http"):
+        host_val = f"http://{host_val}"
+    status_url = f"{host_val.rstrip('/')}/status"
+
+    timeout_sec = int(get_setting("timeout", "2000")) / 1000.0
+    online = False
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                status_url,
+                timeout=aiohttp.ClientTimeout(total=timeout_sec),
+                headers={"User-Agent": "udpxy-scanner/1.0"}
+            ) as r:
+                body = await r.text()
+                if r.status == 200 and "udpxy" in body.lower():
+                    online = True
+    except Exception as e:
+        logger.warning(f"⚠️ [在线检测失败] id={cache_id} -> {e}")
+
+    new_status = 1 if online else -1
+    now = int(time.time())
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE cache SET status=?, updatedAt=? WHERE id=?",
+            (new_status, now, cache_id)
+        )
+
+    return {"ok": True, "online": online, "updatedAt": now, "status": new_status}
+
+
 @router.post("/source-cache/delete")
-def api_source_cache_delete(data: SourceCacheDelete):
-    """根据 id 列表或 sourceType 列表删除 source_cache 数据，body raw JSON"""
+def api_cache_delete(data: SourceCacheDelete):
+    """根据 id 列表或 sourceType 列表删除 cache 数据，body raw JSON"""
     ids = data.ids
     source_types = data.sourceTypes
 
@@ -197,13 +262,13 @@ def api_source_cache_delete(data: SourceCacheDelete):
     if not ids and not source_types:
         raise HTTPException(400, "请提供 ids 或 sourceTypes 参数")
 
-    with get_cache_db() as conn:
+    with get_db() as conn:
         if ids:
             placeholders = ",".join("?" for _ in ids)
-            conn.execute(f"DELETE FROM source_cache WHERE id IN ({placeholders})", ids)
+            conn.execute(f"DELETE FROM cache WHERE id IN ({placeholders})", ids)
         if source_types:
             placeholders = ",".join("?" for _ in source_types)
-            conn.execute(f"DELETE FROM source_cache WHERE sourceType IN ({placeholders})", source_types)
+            conn.execute(f"DELETE FROM cache WHERE sourceType IN ({placeholders})", source_types)
     return {"ok": True}
 
 
