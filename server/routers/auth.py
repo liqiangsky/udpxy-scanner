@@ -124,7 +124,9 @@ def api_change_password(request: Request, req: ChangePasswordRequest):
     new_hash = "pbkdf2$" + hash_password(req.newPassword)
     with get_db() as conn:
         conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('password_hash', ?)", (new_hash,))
-    # 只清除当前用户的 session，其他用户不受影响
+    # 清除密码设置缓存，确保下次登录读到新密码
+    from db.database import _settings_cache
+    _settings_cache.pop("password_hash", None)
     auth_token = request.headers.get("X-Auth-Token", "")
     if auth_token in _sessions:
         del _sessions[auth_token]
