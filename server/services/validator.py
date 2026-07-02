@@ -1,8 +1,11 @@
 # services/validator.py
 import aiohttp
 import asyncio
+import logging
 import time
 from typing import Optional
+
+logger = logging.getLogger("校验器")
 
 async def verify_single_host(session: aiohttp.ClientSession, host: str, target_addr: str, timeout_sec: float, should_stop_func, protocol: str = None) -> Optional[dict]:
     host = host.strip()
