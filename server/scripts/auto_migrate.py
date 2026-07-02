@@ -224,7 +224,7 @@ def _write_common(db_path: str, old_data: dict):
             print(f"  - {table}: 空表")
             continue
 
-        cmd = "INSERT OR REPLACE" if table in ("settings", "parameters") else "INSERT OR IGNORE"
+        cmd = "INSERT OR REPLACE" if target == "parameter" else "INSERT OR IGNORE"
         new.executemany(
             f"{cmd} INTO {target} ({col_names}) VALUES ({placeholders})",
             values,
