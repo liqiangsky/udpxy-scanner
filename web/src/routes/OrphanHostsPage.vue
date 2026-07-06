@@ -10,12 +10,7 @@
           <span>{{ totalCount }}</span> 个
         </div>
         <div class="header-filters">
-          <div class="select-wrapper-inline">
-            <select v-model="filterForm.geoRegion" class="apple-select-sm">
-              <option value="">全部地区</option>
-              <option v-for="opt in regions" :key="opt" :value="opt">{{ opt }}</option>
-            </select>
-          </div>
+          <RegionFilter v-model="filterForm.geoRegion" />
         </div>
       </div>
     </div>
@@ -175,7 +170,7 @@ import { ref, computed, reactive, onMounted, onBeforeUnmount, watch, nextTick } 
 import request from '@/api'
 import { toast } from '@/components/Toast'
 import { batchSelectActive, formatTime } from '@/shared'
-import { regions } from '@/data.js'
+import RegionFilter from '@/components/RegionFilter.vue'
 
 const filterForm = reactive({ geoRegion: '' })
 const loading = ref(false)

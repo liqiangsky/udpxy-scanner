@@ -24,6 +24,9 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
     progress.value = {
       running: res.running,
       currentId: res.currentId,
+      currentIndex: res.currentIndex,
+      currentName: res.currentName,
+      total: res.total,
       queuedIds: res.queuedIds || [],
     }
 

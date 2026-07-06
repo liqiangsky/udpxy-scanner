@@ -3,6 +3,7 @@
 公共缓存表 cache 读写工具
 """
 import logging
+import time
 from typing import List, Optional
 from db.database import get_db
 
@@ -15,6 +16,8 @@ def cache_sources(source_type: str, sources: List[dict]):
     if not sources:
         return
 
+    now = int(time.time())
+
     with get_db() as conn:
         seen = set()
         rows = []
@@ -25,11 +28,11 @@ def cache_sources(source_type: str, sources: List[dict]):
             if not region or region not in _CN_REGIONS:
                 continue
             seen.add(s["host"])
-            rows.append((source_type, s["host"], region, s.get("geoOperator", "")))
+            rows.append((source_type, s["host"], region, s.get("geoOperator", ""), 1, now, now))
 
         if rows:
             conn.executemany(
-                "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 rows
             )
             regions = set(r[2] for r in rows)
@@ -87,20 +90,23 @@ def get_existing_hosts_batch(hosts: List[str], chunk_size: int = 500) -> set:
 
 
 def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: str):
+    now = int(time.time())
     with get_db() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
-            (source_type, host, geo_region, geo_operator)
+            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (source_type, host, geo_region, geo_operator, 1, now, now)
         )
 
 
 def cache_host_geo_batch(rows: list):
     if not rows:
         return
+    now = int(time.time())
+    batch_rows = [r + (1, now, now) for r in rows]
     with get_db() as conn:
         conn.executemany(
-            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator) VALUES (?, ?, ?, ?)",
-            rows
+            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            batch_rows
         )
 
 

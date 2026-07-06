@@ -23,7 +23,6 @@ class TaskRunnerStatus:
         # 复测协调
         self._rechecking = False
         self._pause_recheck = False
-        self._recheck_stop_requested = False
 
     def start(self, total_count: int, config_ids: list = None):
         # 请求复测暂停，等待已有复测 worker 退出（最多等 10 秒）
@@ -167,21 +166,11 @@ class TaskRunnerStatus:
         with self._lock:
             self._rechecking = True
             self._pause_recheck = False
-            self._recheck_stop_requested = False
-
+            
     def clear_rechecking(self):
         with self._lock:
             self._rechecking = False
             self._pause_recheck = False
-            self._recheck_stop_requested = False
-
-    def stop_recheck(self):
-        with self._lock:
-            self._recheck_stop_requested = True
-
-    def should_stop_recheck(self) -> bool:
-        with self._lock:
-            return self._recheck_stop_requested or self._pause_recheck
 
     def should_pause_recheck(self) -> bool:
         with self._lock:

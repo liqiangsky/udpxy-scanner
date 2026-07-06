@@ -98,14 +98,12 @@ async def execute_recheck() -> int:
             async def recheck_worker(source):
                 async with concurrency_sem:
                     while task_runner.should_pause_recheck():
-                        if task_runner.should_stop_recheck():
-                            return
                         await asyncio.sleep(2)
 
                     host_raw = source["host"]
                     target_val = source["target"]
                     proto_val = source["protocol"]
-                    result = await verify_single_host(session, host_raw, target_val, timeout_sec, lambda: task_runner.should_stop_recheck(), protocol=proto_val)
+                    result = await verify_single_host(session, host_raw, target_val, timeout_sec, lambda: False, protocol=proto_val)
 
                     if result:
                         async with _result_lock:
@@ -128,7 +126,8 @@ async def execute_recheck() -> int:
             eliminated = 0
 
             if failed_list:
-                logger.info(f"⚠️ [二次复测] 首次失败 {len(failed_list)} 个，开始二次验证")
+                failed_hosts_str = ', '.join(s["host"] for s in failed_list)
+                logger.info(f"⚠️ [二次复测] 首次失败 {len(failed_list)} 个，开始二次验证: {failed_hosts_str}")
 
                 second_success = []
                 second_failed_ids = []
@@ -138,14 +137,12 @@ async def execute_recheck() -> int:
                 async def second_recheck(source):
                     async with concurrency_sem:
                         while task_runner.should_pause_recheck():
-                            if task_runner.should_stop_recheck():
-                                return
                             await asyncio.sleep(2)
 
                         host_raw = source["host"]
                         target_val = source["target"]
                         proto_val = source["protocol"]
-                        result = await verify_single_host(session, host_raw, target_val, timeout_sec, lambda: task_runner.should_stop_recheck(), protocol=proto_val)
+                        result = await verify_single_host(session, host_raw, target_val, timeout_sec, lambda: False, protocol=proto_val)
 
                         if result:
                             async with _result_lock:
@@ -179,7 +176,8 @@ async def execute_recheck() -> int:
                                 [(h,) for h in second_failed_hosts]
                             )
                     eliminated = len(second_failed_ids)
-                    logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个源（两次复测均失败）")
+                    eliminated_hosts_str = ', '.join(second_failed_hosts)
+                    logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个源（两次复测均失败）: {eliminated_hosts_str}")
 
             logger.info(f"🧹 [复测完成] {len(active_sources)} 个活源复测完毕，淘汰 {eliminated} 个")
             return eliminated

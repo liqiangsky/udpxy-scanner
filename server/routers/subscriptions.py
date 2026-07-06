@@ -110,35 +110,48 @@ def api_fetch_subscription(sub_id: int):
 
 
 @router.post("/subscriptions/fetch-all")
-async def api_fetch_all_subscriptions():
-    """手动触发所有已启用订阅拉取"""
+def api_fetch_all_subscriptions():
+    """手动触发所有已启用订阅拉取，后台异步执行，不阻塞返回"""
     with get_db() as conn:
         rows = conn.execute(
             "SELECT * FROM subscription WHERE enabled=1"
         ).fetchall()
 
-    async def _fetch_one(row):
-        logger.info(f"📡 开始拉取订阅 {row['name']}")
-        try:
-            sources = await fetch_subscription(row["name"], row["uid"], row["url"])
-            fetched = 0
-            if sources:
-                hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-                fetched = await process_source_data(row["uid"], hosts_data)
-            return {"uid": row["uid"], "name": row["name"], "fetched": fetched}
-        except Exception as e:
-            logger.error(f"❌ 拉取订阅 {row['name']} 失败: {e}")
-            return {"uid": row["uid"], "name": row["name"], "fetched": 0, "error": str(e)}
+    if not rows:
+        raise HTTPException(400, "无已启用的订阅")
 
-    results = await asyncio.gather(*(_fetch_one(dict(r)) for r in rows))
-    results = list(results)
+    def run_all():
+        async def _do_all():
+            results = await asyncio.gather(*(
+                _fetch_single(dict(r)) for r in rows
+            ), return_exceptions=True)
 
-    now = int(time.time())
-    with get_db() as conn:
-        for row in rows:
-            conn.execute(
-                "UPDATE subscription SET lastFetchAt=? WHERE id=?",
-                (now, row["id"])
-            )
+            now = int(time.time())
+            with get_db() as conn:
+                for row in rows:
+                    conn.execute(
+                        "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                        (now, row["id"])
+                    )
+            success = sum(1 for r in results if isinstance(r, int))
+            logger.info(f"✅ 全部拉取完成: {success}/{len(rows)} 个成功")
 
-    return {"ok": True, "results": results}
+        asyncio.run(_do_all())
+
+    threading.Thread(target=run_all, daemon=True).start()
+    return {"ok": True, "msg": "全部订阅拉取任务已在后台启动"}
+
+
+async def _fetch_single(row: dict) -> int:
+    """拉取单个订阅，返回成功数量"""
+    logger.info(f"📡 开始拉取订阅 {row['name']}")
+    try:
+        sources = await fetch_subscription(row["name"], row["uid"], row["url"])
+        fetched = 0
+        if sources:
+            hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
+            fetched = await process_source_data(row["uid"], hosts_data)
+        return fetched
+    except Exception as e:
+        logger.error(f"❌ 拉取订阅 {row['name']} 失败: {e}")
+        return 0

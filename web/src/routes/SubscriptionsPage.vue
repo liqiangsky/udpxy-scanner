@@ -2,9 +2,18 @@
   <div class="page-container">
     <div class="page-header">
       <h1 class="page-title">订阅</h1>
-      <button class="action-btn primary-btn" @click="startAddSub">
-        <span class="material-symbols-outlined icon-g-btn">add</span>
-      </button>
+      <div class="header-actions">
+        <button
+          class="fetch-all-btn"
+          @click="handleFetchAll"
+          title="一键拉取所有订阅"
+        >
+          <span class="material-symbols-outlined icon-g-btn">cloud_download</span>
+        </button>
+        <button class="action-btn primary-btn" @click="startAddSub">
+          <span class="material-symbols-outlined icon-g-btn">add</span>
+        </button>
+      </div>
     </div>
 
     <div class="header-spacer"></div>
@@ -216,6 +225,15 @@ const handleToggleEnabled = async (sub) => {
       enabled: !sub.enabled,
     })
     await loadSubscriptions()
+  } catch {
+    /* 错误由拦截器统一提示 */
+  }
+}
+
+const handleFetchAll = async () => {
+  try {
+    await request.post('/subscriptions/fetch-all')
+    toast.success('全部订阅拉取任务已在后台启动')
   } catch {
     /* 错误由拦截器统一提示 */
   }
@@ -483,6 +501,35 @@ input:checked + .slider:before {
 }
 .icon-g-btn {
   font-size: 18px !important;
+}
+
+/* 页头操作区 */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 一键拉取按钮 */
+.fetch-all-btn {
+  background: var(--color-green);
+  color: #fff;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.fetch-all-btn:active {
+  transform: scale(0.9);
+}
+.fetch-all-btn:active {
+  transform: scale(0.9);
 }
 
 /* ===== 空状态 ===== */

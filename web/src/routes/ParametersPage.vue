@@ -74,18 +74,6 @@
           </p>
         </div>
 
-        <button
-          type="button"
-          class="fetch-btn-mini"
-          :class="{ fetching: scanning }"
-          @click="handleScan"
-        >
-          <span class="material-symbols-outlined fetch-icon" :class="{ spin: scanning }"
-            >search</span
-          >
-          <span>{{ scanning ? '扫描中...' : '手动扫描' }}</span>
-        </button>
-
         <div class="form-group">
           <label>定时复测 (Cron)</label>
           <input
@@ -96,18 +84,6 @@
           />
           <p class="field-desc">Cron 表达式：分 时 日 月 周。留空不执行。</p>
         </div>
-
-        <button
-          type="button"
-          class="fetch-btn-mini"
-          @click="handleRecheck"
-          :class="{ fetching: rechecking }"
-        >
-          <span class="material-symbols-outlined fetch-icon" :class="{ spin: rechecking }"
-            >autorenew</span
-          >
-          <span>{{ rechecking ? '复测中...' : '手动复测' }}</span>
-        </button>
 
         <div class="cron-help">
           <details>
@@ -204,9 +180,6 @@ const settings = reactive({
 })
 
 const saving = ref(false)
-const scanning = ref(false)
-const rechecking = ref(false)
-
 const loadSettings = async () => {
   const res = await settingsStore.fetch()
   if (res.engine) Object.assign(settings.engine, res.engine)
@@ -231,30 +204,6 @@ const handleSave = async () => {
     console.error('保存失败:', e)
   } finally {
     saving.value = false
-  }
-}
-
-const handleScan = async () => {
-  scanning.value = true
-  try {
-    await request.post('/configs/run-all')
-    toast.success('扫描任务已触发')
-  } catch {
-    /* 错误由拦截器统一提示 */
-  } finally {
-    scanning.value = false
-  }
-}
-
-const handleRecheck = async () => {
-  rechecking.value = true
-  try {
-    await request.post('/cron/recheck')
-    toast.success('复测任务已在后台启动')
-  } catch {
-    /* 错误由拦截器统一提示 */
-  } finally {
-    rechecking.value = false
   }
 }
 

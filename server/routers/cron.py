@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from services.cron_heartbeat import handle_heartbeat
 
+
 router = APIRouter()
 
 
@@ -38,3 +39,13 @@ async def api_cron_recheck():
 
     threading.Thread(target=run_recheck, daemon=True).start()
     return {"ok": True, "msg": "复测任务已在后台启动"}
+
+
+@router.get("/cron/recheck/status")
+def api_cron_recheck_status():
+    """
+    获取活源复测状态。
+    """
+    from core.status import task_runner
+    return {"rechecking": task_runner.is_rechecking()}
+

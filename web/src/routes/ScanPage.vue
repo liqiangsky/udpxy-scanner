@@ -2,9 +2,27 @@
   <div class="page-container">
     <div class="page-header">
       <h1 class="page-title">扫描</h1>
-      <button class="action-btn primary-btn" @click="openForm()">
-        <span class="material-symbols-outlined icon-g-btn">add</span>
-      </button>
+      <div class="header-right">
+        <div class="header-filters">
+          <RegionFilter v-model="filterForm.region" />
+          <OperatorFilter v-model="filterForm.operator" />
+        </div>
+        <div class="header-actions">
+          <button
+            class="scan-all-btn"
+            :class="{ scanning: scanningAll }"
+            @click="handleScanAll"
+            :title="scanningAll ? '停止全部扫描' : '启动全部扫描'"
+          >
+            <span class="material-symbols-outlined icon-g-btn">
+              {{ scanningAll ? 'stop' : 'play_arrow' }}
+            </span>
+          </button>
+          <button class="action-btn primary-btn" @click="openForm()">
+            <span class="material-symbols-outlined icon-g-btn">add</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="header-spacer"></div>
@@ -19,7 +37,7 @@
       </div>
       <TransitionGroup v-else name="list-fade">
         <div
-          v-for="config in configs"
+          v-for="config in filteredConfigs"
           :key="config.id"
           class="config-card"
           :class="{
@@ -128,8 +146,8 @@
         </div>
       </TransitionGroup>
 
-      <div v-if="scanConfigStore.loaded && configs.length === 0" class="empty-state">
-        暂无扫描配置，点击右上角新建
+      <div v-if="scanConfigStore.loaded && filteredConfigs.length === 0" class="empty-state">
+        {{ configs.length === 0 ? '暂无扫描配置，点击右上角新建' : '当前筛选条件下无匹配配置' }}
       </div>
     </div>
 
@@ -226,6 +244,8 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import request from '@/api'
 import { toast } from '@/components/Toast'
 import { useScanConfigStore } from '@/stores/scanConfig'
+import RegionFilter from '@/components/RegionFilter.vue'
+import OperatorFilter from '@/components/OperatorFilter.vue'
 import { regions, operators } from '@/data.js'
 
 const scanConfigStore = useScanConfigStore()
@@ -239,6 +259,25 @@ const activeIds = computed(() => {
   const ids = [...queuedIds.value]
   if (scanningId.value) ids.unshift(scanningId.value)
   return ids
+})
+
+const scanningAll = computed(() => progress.value.running)
+
+// 筛选
+const filterForm = reactive({
+  region: '',
+  operator: '',
+})
+
+const filteredConfigs = computed(() => {
+  let list = configs.value
+  if (filterForm.region) {
+    list = list.filter((c) => c.templateRegion === filterForm.region)
+  }
+  if (filterForm.operator) {
+    list = list.filter((c) => c.templateOperator === filterForm.operator)
+  }
+  return list
 })
 
 // 订阅源标签
@@ -291,6 +330,27 @@ const getDefaultFormData = () => ({
 })
 
 const formData = reactive(getDefaultFormData())
+
+const handleScanAll = async () => {
+  if (scanningAll.value) {
+    // 停止全部
+    try {
+      await request.post('/configs/stop-all')
+      toast.info('正在停止所有扫描任务...')
+    } catch {
+      /* 错误由拦截器统一提示 */
+    }
+  } else {
+    // 启动全部
+    try {
+      await request.post('/configs/run-all')
+      toast.success('已启动全部扫描任务')
+      scanConfigStore.startPolling()
+    } catch {
+      /* 错误由拦截器统一提示 */
+    }
+  }
+}
 
 const toggleScan = async (config) => {
   if (!config.enabled) {
@@ -891,6 +951,72 @@ onUnmounted(() => {
 }
 .cancel-btn:active {
   background: #e8e8ed;
+}
+
+/* 页头右侧 */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 筛选下拉 */
+.header-filters {
+  display: flex;
+  gap: 6px;
+}
+.apple-select-sm {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-neutral);
+  color: var(--text-primary);
+  border: none;
+  padding: 6px 28px 6px 10px;
+  border-radius: var(--radius-input);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%238E8E93' d='M0 0h10L5 6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.apple-select-sm:active,
+.apple-select-sm:hover {
+  background-color: #e8e8ed;
+}
+
+/* 页头操作区 */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 全部扫描 / 停止按钮 - 图标圆形按钮 */
+.scan-all-btn {
+  background: var(--color-green);
+  color: #fff;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.scan-all-btn .icon-g-btn {
+  font-size: 18px !important;
+}
+.scan-all-btn.scanning {
+  background: var(--color-red);
+}
+.scan-all-btn:active {
+  transform: scale(0.9);
 }
 
 @keyframes pulse {

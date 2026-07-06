@@ -4,21 +4,20 @@
       <h1 class="page-title">主机</h1>
       <div class="header-right">
         <div class="filter-counter-top">
-          <span>{{ totalCount }}</span> 个可用
+          <span>{{ totalCount }}</span> 个
         </div>
         <div class="header-filters">
-          <div class="select-wrapper-inline">
-            <select v-model="filterForm.region" class="apple-select-sm">
-              <option value="">全部地区</option>
-              <option v-for="opt in regions" :key="opt" :value="opt">{{ opt }}</option>
-            </select>
-          </div>
-          <div class="select-wrapper-inline">
-            <select v-model="filterForm.operator" class="apple-select-sm">
-              <option value="">全部网络</option>
-              <option v-for="opt in operators" :key="opt" :value="opt">{{ opt }}</option>
-            </select>
-          </div>
+          <RegionFilter v-model="filterForm.region" />
+          <OperatorFilter v-model="filterForm.operator" />
+        </div>
+        <div class="header-actions">
+          <button
+            class="recheck-btn"
+            @click="handleRecheck"
+            title="手动复测"
+          >
+            <span class="material-symbols-outlined icon-g-btn">autorenew</span>
+          </button>
         </div>
       </div>
     </div>
@@ -148,7 +147,8 @@
 <script setup>
 import { ref, computed, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import request from '@/api'
-import { regions, operators } from '@/data.js'
+import RegionFilter from '@/components/RegionFilter.vue'
+import OperatorFilter from '@/components/OperatorFilter.vue'
 import { toast } from '@/components/Toast'
 import { useAuthStore } from '@/stores/auth'
 import { batchSelectActive, formatTime } from '@/shared'
@@ -336,6 +336,15 @@ watch(
     exitSelectMode()
   },
 )
+
+const handleRecheck = async () => {
+  try {
+    await request.post('/cron/recheck')
+    toast.success('复测任务已在后台启动')
+  } catch {
+    /* 错误由拦截器统一提示 */
+  }
+}
 
 const handleCopy = async (host) => {
   try {
@@ -757,6 +766,36 @@ onBeforeUnmount(() => {
 .copy-btn .icon-g { color: var(--text-muted); }
 .delay-interactive-badge .icon-g { color: var(--color-green); }
 .time-wrapper .icon-g { color: var(--text-muted); }
+
+/* 页头操作区 */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 复测按钮 */
+.recheck-btn {
+  background: var(--color-orange);
+  color: #fff;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.recheck-btn:active {
+  transform: scale(0.9);
+}
+.recheck-btn .icon-g-btn {
+  font-size: 18px !important;
+}
 
 /* 加载更多 */
 .load-more-wrap {

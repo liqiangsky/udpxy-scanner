@@ -125,6 +125,15 @@ def api_stop_single_config(config_id: int):
     logger.warning(f"⚠️ [停止失败] cfg_id={config_id} 不在队列中（可能已完成或正在执行）")
     raise HTTPException(400, "该配置不在队列中（可能已完成或正在执行）")
 
+@router.post("/configs/stop-all")
+def api_stop_all():
+    if task_runner.is_idle():
+        raise HTTPException(400, "当前无运行中的任务")
+    task_runner.stop()
+    logger.info("🛑 [全部停止] 已请求停止整个扫描队列")
+    return {"ok": True}
+
+
 @router.post("/configs/run-all")
 def api_trigger_run_all():
     if task_runner.is_rechecking():
