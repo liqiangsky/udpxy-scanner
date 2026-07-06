@@ -122,14 +122,18 @@
       <div v-if="selectMode" class="batch-tabbar">
         <button class="batch-tab-item" @click="selectAll">
           <span class="material-symbols-outlined batch-tab-icon">
-            {{ displayList.length > 0 && displayList.every(s => selection.has(s.id)) ? 'deselect' : 'select_all' }}
+            {{ allCurrentSelected ? 'deselect' : 'select_all' }}
           </span>
-          <span class="batch-tab-text">全选</span>
+          <span class="batch-tab-text">{{
+            allCurrentSelected ? `取消(${displayList.length})` : `全选(${displayList.length})`
+          }}</span>
         </button>
         <div class="batch-tab-divider"></div>
         <button class="batch-tab-item" :class="{ disabled: selection.size === 0 }" :disabled="selection.size === 0" @click="handleBatchDelete">
           <span class="material-symbols-outlined batch-tab-icon delete-color">delete</span>
-          <span class="batch-tab-text delete-color">删除</span>
+          <span class="batch-tab-text delete-color">{{
+            selection.size > 0 ? `删除(${selection.size})` : '删除'
+          }}</span>
         </button>
         <div class="batch-tab-divider"></div>
         <button class="batch-tab-item" @click="exitSelectMode">
@@ -228,20 +232,44 @@ const onCardClick = (item) => {
 }
 const handleBatchDelete = async () => {
   if (selection.size === 0) return
-  const confirmed = confirm(`确定要删除选中的 ${selection.size} 个主机吗？\n\n此操作不可恢复。`)
+  const selectedCount = selection.size
+  const loadedCount = displayList.value.length
+  // 明确告知"全选"实际只作用于已加载项，避免与跨页"全选所有"的预期混淆
+  const scopeHint =
+    totalCount.value > loadedCount
+      ? `\n\n（当前已加载 ${loadedCount} / 共 ${totalCount.value} 项，本次仅删除已加载项中已选中的部分）`
+      : ''
+  const confirmed = confirm(`确定要删除 ${selectedCount} 个主机吗？${scopeHint}\n\n此操作不可恢复。`)
   if (!confirmed) return
 
   const ids = [...selection]
   try {
     const res = await request.post('/hosts/batch-delete', { ids })
     if (res.ok) {
-      const deletedCount = res.success?.length || 0
+      const successIds = res.success || []
+      const failedItems = res.failed || []
+      const deletedCount = successIds.length
+
       if (deletedCount > 0) {
         toast.success(`成功删除 ${deletedCount} 个主机`)
-        rawHostsList.value = rawHostsList.value.filter((i) => !ids.includes(i.id))
+        // 仅从本地列表中移除真正成功的项，避免与失败项不一致
+        rawHostsList.value = rawHostsList.value.filter((i) => !successIds.includes(i.id))
+        totalCount.value = Math.max(0, totalCount.value - deletedCount)
+        successIds.forEach((id) => selection.delete(id))
       }
-      if (res.failed?.length > 0) {
-        toast.warning(`${res.failed.length} 个删除失败`)
+      if (failedItems.length > 0) {
+        // 失败项保留在选中集，便于用户直接重试；host 字符串便于诊断
+        const failedHosts = failedItems.map((f) => {
+          const target = rawHostsList.value.find((i) => i.id === f.id)
+          return target ? target.host : `#${f.id}`
+        })
+        toast.warning(`${failedItems.length} 个删除失败: ${failedHosts.join(', ')}`)
+      }
+
+      // 关键：当前页被删空且仍有数据时，重置到第一页重新拉取。
+      // 不能 currentPage++：删除后 offset 偏移，简单 +1 会跳过原本紧邻的下一页数据
+      if (rawHostsList.value.length === 0 && totalCount.value > 0) {
+        await loadPool(true)
       }
     } else {
       toast.error(res.error || '批量删除失败')
@@ -249,7 +277,8 @@ const handleBatchDelete = async () => {
   } catch {
     /* 错误由拦截器统一提示 */
   }
-  exitSelectMode()
+  // 仅当选中集为空时退出选择模式（保留失败项以便重试）
+  if (selection.size === 0) exitSelectMode()
 }
 
 const loadPool = async (reset = false) => {
@@ -286,6 +315,11 @@ const loadPool = async (reset = false) => {
 }
 
 const displayList = computed(() => rawHostsList.value)
+
+// 当前已加载项是否全部处于选中状态（用于 tabbar 全选/取消标签）
+const allCurrentSelected = computed(
+  () => displayList.value.length > 0 && displayList.value.every((s) => selection.has(s.id)),
+)
 
 const loadMore = () => {
   if (currentPage.value < totalPages.value) {
@@ -344,8 +378,13 @@ const handleDelete = async (item) => {
       toast.success('删除成功')
       // 从列表中移除
       rawHostsList.value = rawHostsList.value.filter((i) => i.id !== item.id)
+      totalCount.value = Math.max(0, totalCount.value - 1)
       // 同步清理选择集
       selection.delete(item.id)
+      // 单条删除同样避免页面变空白：当前页空了且仍有数据 → 重置第一页重新拉取
+      if (rawHostsList.value.length === 0 && totalCount.value > 0) {
+        await loadPool(true)
+      }
     } else {
       toast.error(res.error || '删除失败')
     }

@@ -142,13 +142,11 @@
       <div v-if="selectMode" class="batch-tabbar">
         <button class="batch-tab-item" @click="selectAll">
           <span class="material-symbols-outlined batch-tab-icon">
-            {{
-              dataList.length > 0 && dataList.every((s) => selection.has(s.id))
-                ? 'deselect'
-                : 'select_all'
-            }}
+            {{ allCurrentSelected ? 'deselect' : 'select_all' }}
           </span>
-          <span class="batch-tab-text">全选</span>
+          <span class="batch-tab-text">{{
+            allCurrentSelected ? `取消(${dataList.length})` : `全选(${dataList.length})`
+          }}</span>
         </button>
         <div class="batch-tab-divider"></div>
         <button
@@ -158,7 +156,9 @@
           @click="handleBatchDelete"
         >
           <span class="material-symbols-outlined batch-tab-icon delete-color">delete</span>
-          <span class="batch-tab-text delete-color">删除</span>
+          <span class="batch-tab-text delete-color">{{
+            selection.size > 0 ? `删除(${selection.size})` : '删除'
+          }}</span>
         </button>
         <div class="batch-tab-divider"></div>
         <button class="batch-tab-item" @click="exitSelectMode">
@@ -171,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import request from '@/api'
 import { toast } from '@/components/Toast'
 import { batchSelectActive, formatTime } from '@/shared'
@@ -221,6 +221,11 @@ const selectAll = () => {
     allIds.forEach((id) => selection.add(id))
   }
 }
+
+// 当前已加载项是否全部处于选中状态（用于 tabbar 全选/取消标签）
+const allCurrentSelected = computed(
+  () => dataList.value.length > 0 && dataList.value.every((s) => selection.has(s.id)),
+)
 
 const onPointerDown = (e, item) => {
   if (e.button !== 0) return
@@ -282,7 +287,12 @@ const handleSingleDelete = async (item) => {
     if (res.ok) {
       toast.success('删除成功')
       dataList.value = dataList.value.filter((i) => i.id !== item.id)
+      totalCount.value = Math.max(0, totalCount.value - 1)
       selection.delete(item.id)
+      // 单条删除同样避免页面变空白：当前页空了且仍有数据 → 重置第一页重新拉取
+      if (dataList.value.length === 0 && totalCount.value > 0) {
+        await loadOrphans(true)
+      }
     } else {
       toast.error(res.error || '删除失败')
     }
@@ -293,22 +303,39 @@ const handleSingleDelete = async (item) => {
 
 const handleBatchDelete = async () => {
   if (selection.size === 0) return
-  const confirmed = confirm(`确定要删除选中的 ${selection.size} 个游离主机吗？\n\n此操作不可恢复。`)
+  const selectedCount = selection.size
+  const loadedCount = dataList.value.length
+  // 明确告知"全选"实际只作用于已加载项，避免与跨页"全选所有"的预期混淆
+  const scopeHint =
+    totalCount.value > loadedCount
+      ? `\n\n（当前已加载 ${loadedCount} / 共 ${totalCount.value} 项，本次仅删除已加载项中已选中的部分）`
+      : ''
+  const confirmed = confirm(`确定要删除 ${selectedCount} 个游离主机吗？${scopeHint}\n\n此操作不可恢复。`)
   if (!confirmed) return
 
   const ids = [...selection]
   try {
     const res = await request.post('/source-cache/delete', { ids })
     if (res.ok) {
+      // 服务端为原子 SQL DELETE，无 per-id 详情；按 ids.length 计为成功
       toast.success(`成功删除 ${ids.length} 个游离主机`)
       dataList.value = dataList.value.filter((i) => !ids.includes(i.id))
+      totalCount.value = Math.max(0, totalCount.value - ids.length)
+      ids.forEach((id) => selection.delete(id))
+
+      // 关键：当前页被删空且仍有数据时，重置到第一页重新拉取。
+      // 不能 currentPage++：删除后 offset 偏移，简单 +1 会跳过原本紧邻的下一页数据
+      if (dataList.value.length === 0 && totalCount.value > 0) {
+        await loadOrphans(true)
+      }
     } else {
       toast.error(res.error || '批量删除失败')
     }
   } catch {
     /* 错误由拦截器统一提示 */
   }
-  exitSelectMode()
+  // 仅当选中集为空时退出选择模式
+  if (selection.size === 0) exitSelectMode()
 }
 
 const loadOrphans = async (reset = false) => {
