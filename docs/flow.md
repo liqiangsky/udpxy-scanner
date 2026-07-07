@@ -242,7 +242,7 @@ trigger_background_queue([1, 2, 3])
   │                            │
   └────────────────────────────┘
 
-停止整个队列: POST /configs/run-all → stop()
+停止整个队列: POST /api/configs/stop-all → stop()
   → _should_stop=True + _interrupt_current=True
   → 循环退出，不再自动续跑
 ```
@@ -318,7 +318,7 @@ POST /api/login { password: "xxx" }
   /api/login, /api/logout,
   /api/source/push (用 X-API-Key),
   /api/cron/heartbeat,
-  /api/source-cache/list, /api/source-cache/delete
+  /api/events (SSE，URL 参数 ?token=xxx 自行校验)
 ```
 
 ### 推送认证
@@ -410,6 +410,7 @@ fetch_subscription(name, uid, url)
 | `/api/configs/{id}` | DELETE | Token | 删除扫描配置 |
 | `/api/configs/{id}/run` | POST | Token | 启动单个配置扫描 |
 | `/api/configs/{id}/stop` | POST | Token | 停止单个配置 |
+| `/api/configs/stop-all` | POST | Token | 停止整个扫描队列 |
 | `/api/configs/run-all` | POST | Token | 启动所有启用配置 |
 | `/api/configs/progress` | GET | Token | 获取扫描进度 |
 | `/api/data-sources` | GET | Token | 获取已启用数据源列表 |
@@ -422,13 +423,21 @@ fetch_subscription(name, uid, url)
 | `/api/hosts` | GET | Token | 查询活源池（分页+筛选） |
 | `/api/hosts/{id}/test-delay` | POST | Token | 测试单个源延迟 |
 | `/api/hosts/{id}` | DELETE | Token | 删除单个源 |
-| `/api/source-cache/list` | GET | 无 | 列出缓存数据（分页） |
-| `/api/source-cache/delete` | POST | 无 | 删除缓存数据 |
+| `/api/hosts/batch-delete` | POST | Token | 批量删除主机 |
+| `/api/source-cache/orphans` | GET | Token | 游离主机列表（分页+地区筛选） |
+| `/api/source-cache/{id}/check-online` | POST | Token | 检测游离主机在线状态 |
+| `/api/source-cache/delete` | POST | Token | 删除缓存数据 |
 | `/api/source/push` | POST | API Key | 外部推送 host |
 | `/api/cron/heartbeat` | POST | 无 | 定时心跳触发 |
 | `/api/cron/recheck` | POST | Token | 手动触发复测 |
 | `/api/change-password` | POST | Token | 修改密码 |
 | `/api/logs` | GET | Token | 获取最近日志 |
+| `/api/events` | GET | URL Token | SSE 实时事件推送 |
+| `/api/messages` | GET | Token | 获取消息列表（分页+筛选） |
+| `/api/messages/unread-count` | GET | Token | 获取未读消息数 |
+| `/api/messages/{id}/read` | POST | Token | 标记单条已读 |
+| `/api/messages/read-all` | POST | Token | 标记全部已读 |
+| `/api/messages/{id}` | DELETE | Token | 删除单条消息 |
 
 ---
 

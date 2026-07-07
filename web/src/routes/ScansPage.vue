@@ -336,7 +336,7 @@ const handleScanAll = async () => {
     // 停止全部
     try {
       await request.post('/configs/stop-all')
-      toast.info('正在停止所有扫描任务...')
+      toast.info('正在停止全部扫描...')
     } catch {
       /* 错误由拦截器统一提示 */
     }
@@ -344,7 +344,7 @@ const handleScanAll = async () => {
     // 启动全部
     try {
       await request.post('/configs/run-all')
-      toast.success('已启动全部扫描任务')
+      toast.success('已启动全部扫描')
       scanConfigStore.startPolling()
     } catch {
       /* 错误由拦截器统一提示 */
@@ -354,7 +354,7 @@ const handleScanAll = async () => {
 
 const toggleScan = async (config) => {
   if (!config.enabled) {
-    toast.info('该配置已禁用，无法扫描')
+    toast.info('配置已禁用，无法扫描')
     return
   }
   const isActive = activeIds.value.includes(config.id)
@@ -366,7 +366,7 @@ const toggleScan = async (config) => {
     } else {
       await request.post(`/configs/${config.id}/run`)
       scanConfigStore.addToQueue(config.id)
-      toast.success(scanConfigStore.progress.running ? '已加入队列' : '扫描任务已启动')
+      toast.success(scanConfigStore.progress.running ? '已加入队列' : '扫描已启动')
       scanConfigStore.startPolling()
     }
   } catch {
@@ -403,7 +403,7 @@ const closeForm = () => {
 
 const handleSubmit = async () => {
   if (!formData.name?.trim()) {
-    toast.error('配置名称不能为空')
+    toast.error('请输入配置名称')
     return
   }
   if (!formData.region) {
@@ -442,7 +442,7 @@ const handleSubmit = async () => {
     }
     await scanConfigStore.refresh()
     closeForm()
-    toast.success('保存成功')
+    toast.success('已保存')
   } catch (e) {
     console.error(e)
   }
@@ -462,7 +462,7 @@ const handleDelete = async (id) => {
 
 const handleToggleEnable = async (config) => {
   if (activeIds.value.includes(config.id)) {
-    toast.info('该配置正在运行或排队中，无法禁用')
+    toast.info('配置运行中，无法禁用')
     return
   }
   const newEnabled = !config.enabled

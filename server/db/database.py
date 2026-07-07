@@ -124,6 +124,18 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_host_sourceType ON host(sourceType);
         CREATE INDEX IF NOT EXISTS idx_host_geoRegion ON host(geoRegion);
         CREATE INDEX IF NOT EXISTS idx_host_geoOperator ON host(geoOperator);
+
+        CREATE TABLE IF NOT EXISTS notification (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL DEFAULT 'info',
+            title TEXT NOT NULL,
+            content TEXT DEFAULT '',
+            source TEXT DEFAULT '',
+            read INTEGER DEFAULT 0,
+            createdAt INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_notification_read ON notification(read);
+        CREATE INDEX IF NOT EXISTS idx_notification_created ON notification(createdAt);
     """)
 
     # 初始化默认密码

@@ -11,7 +11,7 @@ import logging
 from db.database import get_db, get_setting
 from core.engine import trigger_background_queue, _db_write_lock
 from core.status import task_runner
-from services.source_cache import cache_sources
+from services.message_service import create_message, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_INFO
 
 logger = logging.getLogger("定时任务")
 
@@ -180,6 +180,10 @@ async def execute_recheck() -> int:
                     logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个源（两次复测均失败）: {eliminated_hosts_str}")
 
             logger.info(f"🧹 [复测完成] {len(active_sources)} 个活源复测完毕，淘汰 {eliminated} 个")
+            if eliminated > 0:
+                create_message(MSG_TYPE_WARNING, f"复测完成：淘汰 {eliminated} 个源", f"{len(active_sources)} 个活源复测完毕，{eliminated} 个已不可达已清除", "复测任务")
+            else:
+                create_message(MSG_TYPE_SUCCESS, f"复测完成：全部 {len(active_sources)} 个源均可用", f"{len(active_sources)} 个活源复测完毕，全部在线", "复测任务")
             return eliminated
     finally:
         task_runner.clear_rechecking()

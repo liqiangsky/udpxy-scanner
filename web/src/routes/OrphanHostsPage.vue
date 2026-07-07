@@ -169,7 +169,7 @@
 import { ref, computed, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import request from '@/api'
 import { toast } from '@/components/Toast'
-import { batchSelectActive, formatTime } from '@/shared'
+import { batchSelectActive, formatTime, copyToClipboard } from '@/shared'
 import RegionFilter from '@/components/RegionFilter.vue'
 
 const filterForm = reactive({ geoRegion: '' })
@@ -266,10 +266,10 @@ const handleCheckOnline = async (item) => {
 }
 
 const handleCopy = async (host) => {
-  try {
-    await navigator.clipboard.writeText(host)
-    toast.success(`HOST 已复制: ${host}`)
-  } catch {
+  const ok = await copyToClipboard(host)
+  if (ok) {
+    toast.success(`已复制: ${host}`)
+  } else {
     toast.error('复制失败')
   }
 }
@@ -280,7 +280,7 @@ const handleSingleDelete = async (item) => {
   try {
     const res = await request.post('/source-cache/delete', { ids: [item.id] })
     if (res.ok) {
-      toast.success('删除成功')
+      toast.success('已删除')
       dataList.value = dataList.value.filter((i) => i.id !== item.id)
       totalCount.value = Math.max(0, totalCount.value - 1)
       selection.delete(item.id)
@@ -556,6 +556,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .action-btn {
@@ -583,7 +584,7 @@ onBeforeUnmount(() => {
 }
 
 .copy-btn {
-  background: var(--bg-neutral);
+  background: #e3f2fd;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -597,7 +598,7 @@ onBeforeUnmount(() => {
 }
 .copy-btn:active {
   transform: scale(0.9);
-  background: #e8e8ed;
+  background: #bbdefb;
 }
 
 .section-metrics-grid {
@@ -654,7 +655,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .copy-btn .icon-g {
-  color: var(--text-muted);
+  color: var(--color-blue);
 }
 .time-wrapper .icon-g {
   color: var(--text-muted);

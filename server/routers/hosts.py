@@ -133,13 +133,13 @@ async def api_test_delay(source_id: int):
                     now = int(time.time())
                     await run_in_thread(_update_host_delay, delay, now, source_id)
                     logger.info(f"✅ [延迟测试] id={source_id} -> {delay}ms")
-                    return {"ok": True, "delay": delay}
+                    return {"ok": True, "delay": delay, "updatedAt": now}
     except Exception as e:
         logger.warning(f"⚠️ [延迟测试失败] id={source_id} -> {e}")
 
     now = int(time.time())
     await run_in_thread(_update_host_delay, -1, now, source_id)
-    return {"ok": False, "delay": -1}
+    return {"ok": False, "delay": -1, "updatedAt": now}
 
 
 @router.delete("/hosts/{source_id}")
@@ -175,7 +175,7 @@ def api_batch_delete_hosts(data: dict):
     """批量删除主机。"""
     ids = data.get("ids", [])
     if not ids:
-        return {"ok": False, "error": "ids 不能为空"}
+        return {"ok": False, "error": "缺少 ids 参数"}
 
     success = []
     failed = []

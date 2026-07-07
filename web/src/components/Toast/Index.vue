@@ -1,7 +1,7 @@
 <template>
   <div class="sc-toast-container">
     <TransitionGroup name="toast-slide" tag="div" class="sc-toast-group">
-      <div v-for="item in items" :key="item.id" class="sc-toast-item" :class="`type-${item.type}`">
+      <div v-for="item in items" :key="item.id" class="sc-toast-item" :class="[`type-${item.type}`, { 'is-notif': item.notification }]">
         <span class="sc-toast-icon material-symbols-outlined">{{ icons[item.type] }}</span>
         <div class="sc-toast-content">{{ item.message }}</div>
         <button class="sc-toast-close" @click="remove(item.id)">
@@ -28,9 +28,17 @@ const icons = {
   warning: 'warning',
 }
 
-const add = (message, type = 'info', duration = 3500) => {
+const MAX_VISIBLE = 3
+
+const add = (message, type = 'info', duration = 3500, notification = false) => {
   const id = idCounter++
-  items.value.push({ id, message, type })
+  items.value.push({ id, message, type, notification })
+
+  // 超出上限时移除最早的一条
+  if (items.value.length > MAX_VISIBLE) {
+    const oldest = items.value[0]
+    remove(oldest.id)
+  }
 
   if (duration > 0) {
     const timer = setTimeout(() => {
@@ -57,16 +65,16 @@ defineExpose({ add })
 </script>
 
 <style scoped>
-/* 底部居中定位：移动端拇指可达区域 */
+/* 顶部居中定位 */
 .sc-toast-container {
   position: fixed;
-  bottom: calc(80px + env(safe-area-inset-bottom));
+  top: calc(12px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;
   pointer-events: none;
   width: calc(100% - 32px);
-  max-width: var(--max-content);
+  max-width: min(400px, calc(100% - 32px));
 }
 
 .sc-toast-group {
@@ -75,7 +83,7 @@ defineExpose({ add })
   gap: 8px;
 }
 
-/* Toast 卡片：深色毛玻璃风格 */
+/* Toast 卡片：半透明白底毛玻璃 */
 .sc-toast-item {
   display: flex;
   align-items: center;
@@ -87,7 +95,9 @@ defineExpose({ add })
   backdrop-filter: blur(20px);
   pointer-events: auto;
   box-sizing: border-box;
-  transition: box-shadow 0.2s ease;
+  /* 动效：用于 TransitionGroup 的 enter/leave */
+  transition: opacity 0.35s cubic-bezier(0.25, 1, 0.5, 1),
+              transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* 核心内容区 */
@@ -128,72 +138,85 @@ defineExpose({ add })
   font-size: 18px !important;
 }
 
-/* 状态配色：深色背景 + 彩色图标 */
-.type-success {
-  background-color: rgba(16, 30, 24, 0.88);
-  color: #e8f7f0;
+/* 状态配色：半透明白底 + 彩色图标点缀 */
+.sc-toast-item {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  color: var(--text-primary);
+  border: 1px solid rgba(0, 0, 0, 0.04);
 }
+
 .type-success .sc-toast-icon {
   color: var(--color-green);
 }
 .type-success .sc-toast-close {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
 }
 
-.type-error {
-  background-color: rgba(30, 12, 18, 0.88);
-  color: #ffe8eb;
-}
 .type-error .sc-toast-icon {
   color: var(--color-red);
 }
 .type-error .sc-toast-close {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
 }
 
-.type-info {
-  background-color: rgba(12, 20, 36, 0.88);
-  color: #e8f0ff;
-}
 .type-info .sc-toast-icon {
   color: var(--color-blue);
 }
 .type-info .sc-toast-close {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
 }
 
-.type-warning {
-  background-color: rgba(30, 22, 8, 0.88);
-  color: #fff3e0;
-}
 .type-warning .sc-toast-icon {
   color: var(--color-orange);
 }
 .type-warning .sc-toast-close {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
 }
 
-/* 动画：底部上浮 + 淡入淡出 */
+/* 通知 Toast：在白底毛玻璃上叠加极淡彩色透出 + 加粗文字 */
+.is-notif {
+  position: relative;
+}
+.is-notif::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.is-notif.type-success::before { background: rgba(52, 199, 89, 0.06); }
+.is-notif.type-error::before   { background: rgba(255, 59, 48, 0.06); }
+.is-notif.type-info::before    { background: rgba(0, 122, 255, 0.06); }
+.is-notif.type-warning::before { background: rgba(255, 149, 0, 0.06); }
+
+.is-notif .sc-toast-content {
+  font-weight: 600;
+}
+
+/* 动画：弹入（放大 + 淡入）→ 弹出（缩小 + 淡出） */
 .toast-slide-enter-from {
   opacity: 0;
-  transform: translateY(20px) scale(0.96);
+  transform: scale(0.85);
 }
 .toast-slide-enter-to {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: scale(1);
 }
 .toast-slide-leave-from {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: scale(1);
 }
 .toast-slide-leave-to {
   opacity: 0;
-  transform: translateY(20px) scale(0.96);
+  transform: scale(0.75);
 }
 .toast-slide-move {
   transition: transform 0.3s var(--ease-spring);
 }
 .toast-slide-leave-active {
   position: absolute;
+  width: 100%;
 }
 </style>

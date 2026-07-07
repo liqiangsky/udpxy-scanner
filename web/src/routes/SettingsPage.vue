@@ -65,6 +65,23 @@
         <p class="field-desc">管理已不在主机池中的缓存主机</p>
       </div>
 
+      <!-- 通知入口 -->
+      <div class="settings-card entry-card" @click="$router.push('/settings/notifications')">
+        <div class="card-title-group">
+          <span class="material-symbols-outlined card-icon" style="color: var(--color-blue)"
+            >notifications</span
+          >
+          <h2>通知</h2>
+          <span v-if="msgStore.unreadCount > 0" class="unread-badge">{{
+            msgStore.unreadCount
+          }}</span>
+          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-blue)"
+            >chevron_right</span
+          >
+        </div>
+        <p class="field-desc">扫描完成、复测结果、订阅拉取等系统通知</p>
+      </div>
+
       <!-- 后台日志入口 -->
       <div class="settings-card entry-card" @click="$router.push('/logs')">
         <div class="card-title-group">
@@ -93,14 +110,20 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from '@/components/Toast'
 import { useAuthStore } from '@/stores/auth'
+import { useMessagesStore } from '@/stores/messages'
 import request from '@/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const msgStore = useMessagesStore()
+
+onMounted(() => {
+  msgStore.fetchUnreadCount()
+})
 
 const passwordForm = reactive({
   oldPassword: '',
@@ -110,11 +133,11 @@ const changingPassword = ref(false)
 
 const handleChangePassword = async () => {
   if (!passwordForm.oldPassword || !passwordForm.newPassword) {
-    toast.warning('请填写当前密码和新密码')
+    toast.warning('请填写新旧密码')
     return
   }
   if (passwordForm.newPassword.length < 4) {
-    toast.warning('新密码至少 4 位')
+    toast.warning('密码至少 4 位')
     return
   }
   changingPassword.value = true
@@ -123,12 +146,11 @@ const handleChangePassword = async () => {
       oldPassword: passwordForm.oldPassword.trim(),
       newPassword: passwordForm.newPassword.trim(),
     })
-    toast.success('密码已修改，请重新登录')
+    toast.success('密码已修改，需重新登录')
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
-    setTimeout(() => {
-      router.push('/login')
-    }, 1500)
+    authStore.clearSession()
+    router.push('/login')
   } catch {
     /* 错误由拦截器统一提示 */
   } finally {
@@ -228,5 +250,19 @@ const handleLogout = async () => {
   margin-left: auto;
   font-size: 22px !important;
   color: var(--text-muted);
+}
+
+.unread-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--color-red);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  font-family: var(--font-sans);
 }
 </style>

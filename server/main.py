@@ -14,7 +14,7 @@ import json
 
 from db.database import init_db, get_setting
 from services.log_buffer import setup_log_buffer
-from routers import settings, configs, hosts, cron, auth, subscriptions
+from routers import settings, configs, hosts, cron, auth, subscriptions, notifications
 
 # 日志配置
 logging.basicConfig(
@@ -29,6 +29,10 @@ async def system_lifespan(app: FastAPI):
     setup_log_buffer()
     init_db()
     # init_db 已创建全部表
+    import asyncio
+    from services.event_bus import event_bus
+    # 发送启动消息
+    asyncio.create_task(event_bus.publish("system", {"message": "服务已启动"}))
     yield
 
 app = FastAPI(title="udpxy-scanner", lifespan=system_lifespan)
@@ -50,7 +54,7 @@ from routers.auth import _sessions as auth_sessions, SESSION_TTL
 async def check_auth(request, call_next):
     """所有接口需要登录 session 认证"""
     # 豁免路径：登录、登出、外部推送、cron心跳
-    if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/cron/heartbeat", "/api/source-cache/list"):
+    if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/cron/heartbeat", "/api/events"):
         return await call_next(request)
 
     # 用户登录 session 认证
@@ -98,3 +102,4 @@ app.include_router(configs.router, prefix="/api", tags=["扫描配置"])
 app.include_router(hosts.router, prefix="/api", tags=["纯净活源池"])
 app.include_router(cron.router, prefix="/api", tags=["定时心跳"])
 app.include_router(subscriptions.router, prefix="/api", tags=["数据源订阅"])
+app.include_router(notifications.router, prefix="/api", tags=["消息中心"])

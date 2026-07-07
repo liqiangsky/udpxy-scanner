@@ -199,7 +199,7 @@ const handleSave = async () => {
       pushApiKey: (settings.pushApiKey || '').trim(),
     }
     await settingsStore.update(payload)
-    toast.success('参数已保存')
+    toast.success('已保存')
   } catch (e) {
     console.error('保存失败:', e)
   } finally {
@@ -213,7 +213,7 @@ const generateApiKey = () => {
   crypto.getRandomValues(array)
   const key = Array.from(array, (b) => chars[b % chars.length]).join('')
   settings.pushApiKey = key
-  toast.success('已生成新 API Key，记得保存')
+  toast.success('已生成新 Key，请保存')
 }
 
 onMounted(() => {

@@ -28,9 +28,7 @@ request.interceptors.response.use(
         toast.error('登录已过期，请重新登录')
         const currentPath = window.location.pathname
         const redirect = currentPath !== '/login' ? currentPath : ''
-        setTimeout(() => {
-          router.push(redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login')
-        }, 1500)
+        router.push(redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login')
       } else {
         toast.error(body.msg || '请求失败')
         console.error('API 请求失败:', body)

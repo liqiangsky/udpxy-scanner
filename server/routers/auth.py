@@ -130,4 +130,4 @@ def api_change_password(request: Request, req: ChangePasswordRequest):
     auth_token = request.headers.get("X-Auth-Token", "")
     if auth_token in _sessions:
         del _sessions[auth_token]
-    return {"ok": True, "msg": "密码已修改，请重新登录"}
+    return {"ok": True, "msg": "密码已修改，需重新登录"}

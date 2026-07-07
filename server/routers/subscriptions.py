@@ -8,6 +8,7 @@ from db.database import get_db
 from db.models import ApiSubscriptionCreate
 from services.source_cache import process_source_data
 from services.subscription_fetcher import fetch_subscription
+from services.message_service import create_message, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_ERROR
 
 logger = logging.getLogger("订阅管理")
 router = APIRouter()
@@ -34,7 +35,7 @@ def api_create_subscription(data: ApiSubscriptionCreate):
             )
             sub_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         except Exception as e:
-            raise HTTPException(400, f"创建失败（uid 可能重复）: {e}")
+            raise HTTPException(400, f"创建失败: {e}")
     return {"ok": True, "id": sub_id}
 
 
@@ -85,7 +86,7 @@ def api_fetch_subscription(sub_id: int):
             (sub_id,)
         ).fetchone()
     if not row:
-        raise HTTPException(404, "订阅不存在或未启用")
+        raise HTTPException(404, "订阅未启用或不存在")
 
     sub_info = dict(row)
 
@@ -102,11 +103,13 @@ def api_fetch_subscription(sub_id: int):
                     (int(time.time()), sub_info["id"])
                 )
             logger.info(f"✅ 订阅 {sub_info['name']} 拉取完成")
+            if sources:
+                create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_info['name']}", f"获取到 {len(sources)} 条数据", "订阅管理")
         # Python 3.10+ 中 asyncio.run() 可安全地从非主线程调用（自动创建新事件循环）
         asyncio.run(_do())
 
     threading.Thread(target=run_fetch, daemon=True).start()
-    return {"ok": True, "msg": f"订阅「{sub_info['name']}」拉取任务已在后台启动"}
+    return {"ok": True, "msg": f"已启动拉取：{sub_info['name']}"}
 
 
 @router.post("/subscriptions/fetch-all")
@@ -118,7 +121,7 @@ def api_fetch_all_subscriptions():
         ).fetchall()
 
     if not rows:
-        raise HTTPException(400, "无已启用的订阅")
+        raise HTTPException(400, "无启用订阅")
 
     def run_all():
         async def _do_all():
@@ -135,11 +138,13 @@ def api_fetch_all_subscriptions():
                     )
             success = sum(1 for r in results if isinstance(r, int))
             logger.info(f"✅ 全部拉取完成: {success}/{len(rows)} 个成功")
+            if success > 0:
+                create_message(MSG_TYPE_SUCCESS, f"批量拉取完成", f"{success}/{len(rows)} 个订阅拉取成功", "订阅管理")
 
         asyncio.run(_do_all())
 
     threading.Thread(target=run_all, daemon=True).start()
-    return {"ok": True, "msg": "全部订阅拉取任务已在后台启动"}
+    return {"ok": True, "msg": "已启动全部拉取"}
 
 
 async def _fetch_single(row: dict) -> int:

@@ -24,4 +24,7 @@ export const toast = {
   error(msg, duration) {
     vnode.component.exposed.add(msg, 'error', duration)
   },
+  notify(msg, type = 'info', duration = 3500) {
+    vnode.component.exposed.add(msg, type, duration, true)
+  },
 }

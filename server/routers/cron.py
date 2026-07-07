@@ -32,20 +32,12 @@ async def api_cron_recheck():
     import asyncio
 
     if not task_runner.is_idle():
-        raise HTTPException(400, "当前有运行中的扫描任务")
+        raise HTTPException(400, "扫描任务运行中")
 
     def run_recheck():
         asyncio.run(execute_recheck())
 
     threading.Thread(target=run_recheck, daemon=True).start()
-    return {"ok": True, "msg": "复测任务已在后台启动"}
+    return {"ok": True, "msg": "已启动复测"}
 
-
-@router.get("/cron/recheck/status")
-def api_cron_recheck_status():
-    """
-    获取活源复测状态。
-    """
-    from core.status import task_runner
-    return {"rechecking": task_runner.is_rechecking()}
 

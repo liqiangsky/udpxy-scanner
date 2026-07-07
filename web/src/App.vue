@@ -7,7 +7,7 @@
       <span class="tab-text">主机</span>
     </router-link>
 
-    <router-link to="/scan" class="tab-item" active-class="active">
+    <router-link to="/scans" class="tab-item" active-class="active">
       <span class="material-symbols-outlined tab-icon">analytics</span>
       <span class="tab-text">扫描</span>
     </router-link>
@@ -31,13 +31,31 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useMessagesStore } from '@/stores/messages'
 import { batchSelectActive } from '@/shared'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const msgStore = useMessagesStore()
+
+onMounted(() => {
+  if (authStore.isLoggedIn) {
+    msgStore.connectSSE()
+    msgStore.fetchUnreadCount()
+  }
+})
+
+watch(() => authStore.isLoggedIn, (loggedIn) => {
+  if (loggedIn) {
+    msgStore.connectSSE()
+    msgStore.fetchUnreadCount()
+  } else {
+    msgStore.disconnectSSE()
+  }
+})
 
 const showTabbar = computed(() => {
   return authStore.isLoggedIn && !route.meta?.hideNavbar && route.path !== '/login' && !batchSelectActive.value

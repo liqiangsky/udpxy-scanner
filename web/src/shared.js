@@ -3,6 +3,36 @@ import { ref } from 'vue'
 /** 主机页面批量选择模式是否激活 */
 export const batchSelectActive = ref(false)
 
+/** 复制文本到剪贴板，兼容 HTTPS 和 HTTP */
+export async function copyToClipboard(text) {
+  // 方式 1: 现代 Clipboard API（需要 HTTPS 或 localhost）
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // fallthrough
+    }
+  }
+
+  // 方式 2: 传统 document.execCommand('copy')（兼容 HTTP 和旧浏览器）
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  textarea.style.pointerEvents = 'none'
+  document.body.appendChild(textarea)
+  try {
+    textarea.select()
+    document.execCommand('copy')
+    return true
+  } catch {
+    return false
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
 /**
  * 格式化毫秒级时间戳 → YYYY-MM-DD HH:mm:ss
  * @param {number|string|null|undefined} ts - 毫秒级时间戳

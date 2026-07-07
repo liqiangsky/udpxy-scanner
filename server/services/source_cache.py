@@ -75,7 +75,6 @@ def get_cached_geo_batch(hosts: List[str], chunk_size: int = 500) -> dict:
 def get_existing_hosts_batch(hosts: List[str], chunk_size: int = 500) -> set:
     if not hosts:
         return set()
-    from db.database import get_db
     result = set()
     with get_db() as conn:
         for i in range(0, len(hosts), chunk_size):
@@ -87,15 +86,6 @@ def get_existing_hosts_batch(hosts: List[str], chunk_size: int = 500) -> set:
             ).fetchall()
             result.update(row["host"] for row in rows)
     return result
-
-
-def cache_host_geo(source_type: str, host: str, geo_region: str, geo_operator: str):
-    now = int(time.time())
-    with get_db() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (source_type, host, geo_region, geo_operator, 1, now, now)
-        )
 
 
 def cache_host_geo_batch(rows: list):

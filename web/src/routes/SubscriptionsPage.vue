@@ -175,7 +175,7 @@ const cancelForm = () => {
 
 const handleSaveSub = async () => {
   if (!formData.name || !formData.uid || !formData.url) {
-    toast.warning('请填写完整信息')
+    toast.warning('请填写完整')
     return
   }
   try {
@@ -233,7 +233,7 @@ const handleToggleEnabled = async (sub) => {
 const handleFetchAll = async () => {
   try {
     await request.post('/subscriptions/fetch-all')
-    toast.success('全部订阅拉取任务已在后台启动')
+    toast.success('批量拉取已启动')
   } catch {
     /* 错误由拦截器统一提示 */
   }
@@ -243,7 +243,7 @@ const handleFetchSub = async (sub) => {
   fetchingMap.value[sub.id] = true
   try {
     await request.post(`/subscriptions/${sub.id}/fetch`)
-    toast.success('拉取任务已在后台启动')
+    toast.success('拉取已启动')
     await loadSubscriptions()
   } catch {
     /* 错误由拦截器统一提示 */

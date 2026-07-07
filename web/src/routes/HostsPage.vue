@@ -151,7 +151,7 @@ import RegionFilter from '@/components/RegionFilter.vue'
 import OperatorFilter from '@/components/OperatorFilter.vue'
 import { toast } from '@/components/Toast'
 import { useAuthStore } from '@/stores/auth'
-import { batchSelectActive, formatTime } from '@/shared'
+import { batchSelectActive, formatTime, copyToClipboard } from '@/shared'
 
 const authStore = useAuthStore()
 
@@ -340,17 +340,17 @@ watch(
 const handleRecheck = async () => {
   try {
     await request.post('/cron/recheck')
-    toast.success('复测任务已在后台启动')
+    toast.success('已启动复测')
   } catch {
     /* 错误由拦截器统一提示 */
   }
 }
 
 const handleCopy = async (host) => {
-  try {
-    await navigator.clipboard.writeText(host)
-    toast.success(`HOST 已复制: ${host}`)
-  } catch {
+  const ok = await copyToClipboard(host)
+  if (ok) {
+    toast.success(`已复制: ${host}`)
+  } else {
     toast.error('复制失败')
   }
 }
@@ -363,9 +363,11 @@ const handleTestDelay = async (item) => {
     const res = await request.post(`/hosts/${item.id}/test-delay`)
     if (res.ok) {
       item.delay = res.delay
+      item.updatedAt = res.updatedAt
       toast.success(`延迟: ${res.delay}ms`)
     } else {
       item.delay = -1
+      item.updatedAt = res.updatedAt
       toast.warning('超时或不可达')
     }
   } catch {
@@ -384,7 +386,7 @@ const handleDelete = async (item) => {
   try {
     const res = await request.delete(`/hosts/${item.id}`)
     if (res.ok) {
-      toast.success('删除成功')
+      toast.success('已删除')
       // 从列表中移除
       rawHostsList.value = rawHostsList.value.filter((i) => i.id !== item.id)
       totalCount.value = Math.max(0, totalCount.value - 1)
@@ -656,6 +658,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .action-btn {
@@ -681,7 +684,7 @@ onBeforeUnmount(() => {
 .delete-btn .icon-g { color: #e5484d; }
 
 .copy-btn {
-  background: var(--bg-neutral);
+  background: #e3f2fd;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -695,7 +698,7 @@ onBeforeUnmount(() => {
 }
 .copy-btn:active {
   transform: scale(0.9);
-  background: #e8e8ed;
+  background: #bbdefb;
 }
 
 .section-metrics-grid {
@@ -763,7 +766,7 @@ onBeforeUnmount(() => {
   display: inline-block;
   vertical-align: middle;
 }
-.copy-btn .icon-g { color: var(--text-muted); }
+.copy-btn .icon-g { color: var(--color-blue); }
 .delay-interactive-badge .icon-g { color: var(--color-green); }
 .time-wrapper .icon-g { color: var(--text-muted); }
 

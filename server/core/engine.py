@@ -11,6 +11,7 @@ from core.status import task_runner
 from services.source_cache import get_cached_hosts, cache_host_geo_batch, get_existing_hosts_batch
 from services.validator import verify_single_host
 from services.geoip import enrich_geo_batch
+from services.message_service import create_message, MSG_TYPE_INFO, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_ERROR
 
 logger = logging.getLogger("扫描引擎")
 
@@ -351,8 +352,10 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
 
         if total_valid > 0:
             logger.info(f"✅ [队列结束] 共发现 {total_valid} 个有效源")
+            create_message(MSG_TYPE_SUCCESS, f"扫描完成：发现 {total_valid} 个新源", f"本次扫描共发现 {total_valid} 个有效新源", "扫描引擎")
         else:
             logger.info(f"📭 [队列结束] 本次扫描未产生新活源")
+            create_message(MSG_TYPE_INFO, "扫描完成：未发现新源", "本次扫描未产生新活源", "扫描引擎")
 
 
 def trigger_background_queue(config_ids: List[int], skip_disabled: bool = False):

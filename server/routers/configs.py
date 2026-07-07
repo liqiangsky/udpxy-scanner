@@ -2,10 +2,10 @@ import logging
 import time
 import asyncio
 import aiohttp
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
+from typing import Optional
 from db.database import get_db, get_setting
 from db.models import ConfigCreateOrUpdate, SourceCacheDelete
-from typing import Optional
 from core.status import task_runner
 from core.engine import trigger_background_queue, enqueue_background_queue
 
@@ -90,9 +90,9 @@ def api_trigger_single_config(config_id: int):
         if not row:
             raise HTTPException(404, "配置不存在")
         if row["enabled"] != 1:
-            raise HTTPException(400, "该配置已禁用")
+            raise HTTPException(400, "配置已禁用")
     if task_runner.is_rechecking():
-        raise HTTPException(400, "当前正在进行活源复测，请稍后再启动扫描")
+        raise HTTPException(400, "复测进行中，请稍后")
     if task_runner.is_idle():
         logger.info(f"▶️ [手动运行] 空闲状态，启动新队列 cfg_id={config_id}")
         trigger_background_queue([config_id])
@@ -104,7 +104,7 @@ def api_trigger_single_config(config_id: int):
 @router.post("/configs/{config_id}/stop")
 def api_stop_single_config(config_id: int):
     if task_runner.is_idle():
-        raise HTTPException(400, "当前无运行中的任务")
+        raise HTTPException(400, "无运行中的任务")
 
     # 当前正在执行的配置：中断并跳到下一个
     current_id = task_runner.get_current_config_id()
@@ -114,21 +114,21 @@ def api_stop_single_config(config_id: int):
     if current_id == config_id:
         task_runner.stop_current_and_continue()
         logger.info(f"🛑 [中断当前] cfg_id={config_id}，将跳到下一个")
-        return {"ok": True, "msg": "已中断当前任务，自动进入下一个"}
+        return {"ok": True, "msg": "已中断当前任务"}
 
     # 排队中的配置：从队列移除（不包括已完成和正在执行的）
     if task_runner.remove_from_queue(config_id):
         queue = task_runner.get_config_ids()
         logger.info(f"🛑 [移除排队] cfg_id={config_id}，新队列={queue}")
-        return {"ok": True, "msg": "已从队列移除"}
+        return {"ok": True, "msg": "已移除队列"}
 
     logger.warning(f"⚠️ [停止失败] cfg_id={config_id} 不在队列中（可能已完成或正在执行）")
-    raise HTTPException(400, "该配置不在队列中（可能已完成或正在执行）")
+    raise HTTPException(400, "配置不在队列中")
 
 @router.post("/configs/stop-all")
 def api_stop_all():
     if task_runner.is_idle():
-        raise HTTPException(400, "当前无运行中的任务")
+        raise HTTPException(400, "无运行中的任务")
     task_runner.stop()
     logger.info("🛑 [全部停止] 已请求停止整个扫描队列")
     return {"ok": True}
@@ -137,16 +137,16 @@ def api_stop_all():
 @router.post("/configs/run-all")
 def api_trigger_run_all():
     if task_runner.is_rechecking():
-        raise HTTPException(400, "当前正在进行活源复测，请稍后再启动扫描")
+        raise HTTPException(400, "复测进行中，请稍后")
     if task_runner.is_idle():
         with get_db() as conn: rows = conn.execute("SELECT id FROM config WHERE enabled=1").fetchall()
-        if not rows: raise HTTPException(400, "无可用激活配置")
+        if not rows: raise HTTPException(400, "无可用配置")
         ids = [r["id"] for r in rows]
         logger.info(f"▶️ [全部运行] 空闲状态，启动新队列 ids={ids}")
         trigger_background_queue(ids, skip_disabled=True)
     else:
         with get_db() as conn: rows = conn.execute("SELECT id FROM config WHERE enabled=1").fetchall()
-        if not rows: raise HTTPException(400, "无可用激活配置")
+        if not rows: raise HTTPException(400, "无可用配置")
         added = []
         for r in rows:
             enqueue_background_queue(r["id"])
@@ -166,27 +166,6 @@ def api_get_progress():
         "total": p["total"],
         "currentName": p["current_config_name"] if p["running"] else None,
         "queuedIds": queued_ids
-    }
-
-
-@router.get("/source-cache/list")
-def api_cache_list(sourceType: str = Query(None), page: int = Query(1, ge=1), page_size: int = Query(500, ge=1, le=2000)):
-    offset = (page - 1) * page_size
-    with get_db() as conn:
-        if sourceType:
-            total = conn.execute("SELECT COUNT(*) AS cnt FROM cache WHERE sourceType=?", (sourceType,)).fetchone()["cnt"]
-            rows = conn.execute(
-                "SELECT * FROM cache WHERE sourceType=? ORDER BY id LIMIT ? OFFSET ?",
-                (sourceType, page_size, offset)
-            ).fetchall()
-        else:
-            total = conn.execute("SELECT COUNT(*) AS cnt FROM cache").fetchone()["cnt"]
-            rows = conn.execute("SELECT * FROM cache ORDER BY sourceType, id LIMIT ? OFFSET ?", (page_size, offset)).fetchall()
-    return {
-        "total": total,
-        "page": page,
-        "pageSize": page_size,
-        "data": [dict(r) for r in rows]
     }
 
 
@@ -230,7 +209,7 @@ async def api_cache_check_online(cache_id: int):
     status_url = f"{host_val.rstrip('/')}/status"
 
     timeout_sec = int(get_setting("timeout", "2000")) / 1000.0
-    online = False
+    new_status = -1
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -241,11 +220,9 @@ async def api_cache_check_online(cache_id: int):
             ) as r:
                 body = await r.text()
                 if r.status == 200 and "udpxy" in body.lower():
-                    online = True
+                    new_status = 1
     except Exception as e:
         logger.warning(f"⚠️ [在线检测失败] id={cache_id} -> {e}")
-
-    new_status = 1 if online else -1
     now = int(time.time())
     with get_db() as conn:
         conn.execute(
@@ -253,7 +230,7 @@ async def api_cache_check_online(cache_id: int):
             (new_status, now, cache_id)
         )
 
-    return {"ok": True, "online": online, "updatedAt": now, "status": new_status}
+    return {"ok": True, "online": new_status == 1, "updatedAt": now, "status": new_status}
 
 
 @router.post("/source-cache/delete")
@@ -313,7 +290,7 @@ async def api_source_push(request: Request):
         "ok": True,
         "sourceType": source_type,
         "received": len(hosts),
-        "msg": "数据已接收，后台处理中"
+        "msg": "已接收，后台处理中"
     }
 
 

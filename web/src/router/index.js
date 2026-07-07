@@ -17,9 +17,9 @@ const routes = [
     component: () => import('@/routes/HostsPage.vue'),
   },
   {
-    path: '/scan',
-    name: 'scan',
-    component: () => import('@/routes/ScanPage.vue'),
+    path: '/scans',
+    name: 'scans',
+    component: () => import('@/routes/ScansPage.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -44,6 +44,12 @@ const routes = [
     path: '/settings/orphans',
     name: 'orphans',
     component: () => import('@/routes/OrphanHostsPage.vue'),
+    meta: { requiresAuth: true, hideNavbar: true },
+  },
+  {
+    path: '/settings/notifications',
+    name: 'notifications',
+    component: () => import('@/routes/MessagesPage.vue'),
     meta: { requiresAuth: true, hideNavbar: true },
   },
   {
