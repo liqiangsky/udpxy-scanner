@@ -1,7 +1,7 @@
-# services/cron_heartbeat.py
+# services/scheduler.py
 """
-Cron 任务检查服务。
-需要外部定时调用 /api/cron/heartbeat 触发（如宿主机 crontab 每分钟 curl）。
+定时任务调度服务。
+由内置调度器每分钟自动触发 handle_heartbeat() 检查 cron 表达式并执行任务。
 """
 import datetime
 import time
@@ -240,17 +240,19 @@ async def handle_heartbeat() -> dict:
         if sources:
             hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
             await process_source_data(sub_dict["uid"], hosts_data)
-        return sub_dict
+            create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_dict['name']}", f"获取到 {len(sources)} 条数据", "定时任务")
+        return (sub_dict, len(sources) if sources else 0)
 
     sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub)) for sub in subscription))
-    for sub_dict in sub_results:
-        if sub_dict is None:
+    for result in sub_results:
+        if result is None:
             continue
+        sub_dict, source_count = result
         with get_db() as conn:
             conn.execute(
                 "UPDATE subscription SET lastFetchAt=? WHERE id=?",
                 (int(time.time()), sub_dict["id"])
             )
-        triggered.append({"task": f"sub_{sub_dict['id']}", "name": sub_dict["name"]})
+        triggered.append({"task": f"sub_{sub_dict['id']}", "name": sub_dict["name"], "fetched": source_count})
 
     return triggered

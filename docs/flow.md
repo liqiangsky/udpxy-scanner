@@ -22,7 +22,7 @@
 | `services/validator.py` | 流验证：GET /{proto}/{target} → 读 512B → 判定有效 |
 | `services/source_cache.py` | 缓存读写：source_cache 的 CRUD + geo 批量操作 + 去重 |
 | `services/regions.py` | 公共常量：中国内地省级行政区集合 |
-| `services/cron_heartbeat.py` | 定时调度：扫描/复测/订阅拉取的 cron 匹配与触发 |
+| `services/scheduler.py` | 定时调度：扫描/复测/订阅拉取的 cron 匹配与触发 |
 | `services/subscription_fetcher.py` | 订阅拉取：从外部 API 获取 host 列表 |
 | `services/log_buffer.py` | 日志缓冲：内存环形缓冲，前端实时查看 |
 | `db/database.py` | 数据层：连接池（threading.local 持久连接）、设置缓存、run_in_thread |
@@ -40,7 +40,7 @@
 |------|----------|------|----------|
 | `POST /api/source/push` | CI 扫描器（ZoomEye/GitHub Code Search）主动推送 | X-API-Key | 后台异步（create_task） |
 | `POST /api/subscriptions/{id}/fetch` | 用户手动点击 | 登录 Token | 后台线程 |
-| `POST /api/cron/heartbeat` | 外部 crontab 每分钟调用 | 无需认证 | 同步 + 并发 |
+| `POST /api/heartbeat` | 外部定时调用保活 | 无需认证 | 同步返回 |
 
 ### 详细流程
 
@@ -100,7 +100,7 @@
 |------|----------|
 | `POST /api/configs/{id}/run` | 用户手动启动单个配置 |
 | `POST /api/configs/run-all` | 用户手动启动所有启用配置 |
-| `POST /api/cron/heartbeat` | cron 定时匹配 scan_cron |
+| 内置调度器 | 每分钟检查 scan_cron |
 
 ### 核心概念：templateRegion
 
@@ -256,7 +256,7 @@ trigger_background_queue([1, 2, 3])
 
 ### 触发
 
-`POST /api/cron/heartbeat` → cron 匹配 `janitor_cron` 设置 → `execute_recheck()`
+内置调度器每分钟检查 `janitor_cron` 设置 → 匹配时执行 `execute_recheck()`
 
 ### 详细流程
 
@@ -317,7 +317,7 @@ POST /api/login { password: "xxx" }
 豁免路径（无需登录）:
   /api/login, /api/logout,
   /api/source/push (用 X-API-Key),
-  /api/cron/heartbeat,
+  /api/heartbeat,
   /api/events (SSE，URL 参数 ?token=xxx 自行校验)
 ```
 
@@ -372,11 +372,11 @@ fetch_subscription(name, uid, url)
 
 ---
 
-## 七、定时调度（cron heartbeat）
+## 七、定时调度
 
 ### 触发方式
 
-外部 crontab 每分钟调用 `POST /api/cron/heartbeat`，服务端匹配当前时间与各 cron 表达式。
+内置调度器每分钟自动检查 cron 表达式，无需外部触发。
 
 ### 调度的 3 类任务
 
@@ -428,8 +428,8 @@ fetch_subscription(name, uid, url)
 | `/api/source-cache/{id}/check-online` | POST | Token | 检测游离主机在线状态 |
 | `/api/source-cache/delete` | POST | Token | 删除缓存数据 |
 | `/api/source/push` | POST | API Key | 外部推送 host |
-| `/api/cron/heartbeat` | POST | 无 | 定时心跳触发 |
-| `/api/cron/recheck` | POST | Token | 手动触发复测 |
+| `/api/heartbeat` | POST | 无 | 心跳保活（防止服务器休眠） |
+| `/api/recheck` | POST | Token | 手动触发复测 |
 | `/api/change-password` | POST | Token | 修改密码 |
 | `/api/logs` | GET | Token | 获取最近日志 |
 | `/api/events` | GET | URL Token | SSE 实时事件推送 |

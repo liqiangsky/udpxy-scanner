@@ -92,6 +92,40 @@
         <p class="field-desc">查看实时运行日志，支持按级别筛选</p>
       </div>
 
+      <!-- Cron 表达式帮助 -->
+      <div class="settings-card">
+        <details class="cron-help-details">
+          <summary class="cron-help-summary">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-icon" style="color: var(--color-orange)">schedule</span>
+              <h2>Cron 表达式帮助</h2>
+              <span class="material-symbols-outlined expand-icon">expand_more</span>
+            </div>
+          </summary>
+          <div class="help-content">
+            <p><b>格式</b>：分 时 日 月 周（5 个字段，空格分隔）</p>
+            <p><b>取值范围</b>：</p>
+            <table>
+              <tr><td>分</td><td>0-59</td></tr>
+              <tr><td>时</td><td>0-23</td></tr>
+              <tr><td>日</td><td>1-31</td></tr>
+              <tr><td>月</td><td>1-12</td></tr>
+              <tr><td>周</td><td>1-7（1=周一，7=周日）</td></tr>
+            </table>
+            <p><b>常用符号</b>：</p>
+            <p><code>*</code> 任意值 &nbsp; <code>/</code> 步长如 <code>*/10</code> 每10分钟</p>
+            <p><code>-</code> 范围如 <code>9-17</code> &nbsp; <code>,</code> 多个值如 <code>8,12,18</code></p>
+            <p><b>常用示例</b>：</p>
+            <p><code>* * * * *</code> → 每分钟</p>
+            <p><code>*/30 * * * *</code> → 每 30 分钟</p>
+            <p><code>0 2 * * *</code> → 每天凌晨 2:00</p>
+            <p><code>0 */4 * * *</code> → 每 4 小时整点</p>
+            <p><code>0 9 * * 1-5</code> → 工作日 9:00</p>
+            <p><code>1 * * * *</code> → 每小时第1分钟</p>
+          </div>
+        </details>
+      </div>
+
       <!-- 退出登录 -->
       <div class="settings-card logout-card" @click="handleLogout">
         <div class="card-title-group">
@@ -264,5 +298,64 @@ const handleLogout = async () => {
   line-height: 20px;
   text-align: center;
   font-family: var(--font-sans);
+}
+
+.cron-help-details {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cron-help-details[open] .expand-icon {
+  transform: rotate(180deg);
+}
+.cron-help-summary {
+  list-style: none;
+  display: block;
+}
+.cron-help-summary::-webkit-details-marker {
+  display: none;
+}
+.cron-help-summary::marker {
+  display: none;
+  content: '';
+}
+.expand-icon {
+  margin-left: auto;
+  font-size: 22px !important;
+  color: var(--text-muted);
+  transition: transform 0.3s ease;
+}
+
+.help-content {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: var(--bg-neutral);
+  border-radius: var(--radius-input);
+}
+.help-content p {
+  margin: 6px 0;
+}
+.help-content code {
+  background: #e8e8ed;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.help-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 12px;
+}
+.help-content td {
+  padding: 4px 10px;
+  border-bottom: 1px solid #e8e8ed;
+}
+.help-content td:first-child {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 </style>

@@ -14,7 +14,7 @@ import json
 
 from db.database import init_db, get_setting
 from services.log_buffer import setup_log_buffer
-from routers import settings, configs, hosts, cron, auth, subscriptions, notifications
+from routers import settings, configs, hosts, auth, subscriptions, notifications, heartbeat, recheck
 
 # 日志配置
 logging.basicConfig(
@@ -31,9 +31,33 @@ async def system_lifespan(app: FastAPI):
     # init_db 已创建全部表
     import asyncio
     from services.event_bus import event_bus
+    from services.scheduler import handle_heartbeat
+
     # 发送启动消息
     asyncio.create_task(event_bus.publish("system", {"message": "服务已启动"}))
+
+    # 内置心跳调度器：每分钟自动触发定时任务检查，无需外部 crontab
+    async def heartbeat_scheduler():
+        import datetime as _dt
+        logger = logging.getLogger("定时任务")
+        logger.info("❤️ 内置心跳调度器已启动，每分钟检查定时任务")
+        # 对齐到下一分钟起始，确保首次检查落在整分钟边界
+        now = _dt.datetime.now()
+        await asyncio.sleep(60 - now.second)
+        while True:
+            try:
+                triggered = await handle_heartbeat()
+                if triggered:
+                    logger.info(f"❤️ 心跳触发 {len(triggered)} 个任务: {[t['task'] for t in triggered]}")
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"❤️ 心跳调度异常: {e}")
+
+    task = asyncio.create_task(heartbeat_scheduler())
     yield
+    task.cancel()
 
 app = FastAPI(title="udpxy-scanner", lifespan=system_lifespan)
 
@@ -53,8 +77,8 @@ from routers.auth import _sessions as auth_sessions, SESSION_TTL
 @app.middleware("http")
 async def check_auth(request, call_next):
     """所有接口需要登录 session 认证"""
-    # 豁免路径：登录、登出、外部推送、cron心跳
-    if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/cron/heartbeat", "/api/events"):
+    # 豁免路径：登录、登出、外部推送、心跳保活
+    if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/heartbeat", "/api/events"):
         return await call_next(request)
 
     # 用户登录 session 认证
@@ -100,6 +124,7 @@ app.include_router(auth.router, prefix="/api", tags=["认证"])
 app.include_router(settings.router, prefix="/api", tags=["全局设置"])
 app.include_router(configs.router, prefix="/api", tags=["扫描配置"])
 app.include_router(hosts.router, prefix="/api", tags=["纯净活源池"])
-app.include_router(cron.router, prefix="/api", tags=["定时心跳"])
+app.include_router(heartbeat.router, prefix="/api", tags=["心跳保活"])
+app.include_router(recheck.router, prefix="/api", tags=["复测任务"])
 app.include_router(subscriptions.router, prefix="/api", tags=["数据源订阅"])
 app.include_router(notifications.router, prefix="/api", tags=["消息中心"])

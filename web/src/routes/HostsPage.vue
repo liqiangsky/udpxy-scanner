@@ -339,7 +339,7 @@ watch(
 
 const handleRecheck = async () => {
   try {
-    await request.post('/cron/recheck')
+    await request.post('/recheck')
     toast.success('已启动复测')
   } catch {
     /* 错误由拦截器统一提示 */

@@ -85,48 +85,7 @@
           <p class="field-desc">Cron 表达式：分 时 日 月 周。留空不执行。</p>
         </div>
 
-        <div class="cron-help">
-          <details>
-            <summary>📖 Cron 表达式帮助</summary>
-            <div class="help-content">
-              <p><b>格式</b>：分 时 日 月 周（5 个字段，空格分隔）</p>
-              <p><b>取值范围</b>：</p>
-              <table>
-                <tr>
-                  <td>分</td>
-                  <td>0-59</td>
-                </tr>
-                <tr>
-                  <td>时</td>
-                  <td>0-23</td>
-                </tr>
-                <tr>
-                  <td>日</td>
-                  <td>1-31</td>
-                </tr>
-                <tr>
-                  <td>月</td>
-                  <td>1-12</td>
-                </tr>
-                <tr>
-                  <td>周</td>
-                  <td>1-7（1=周一，7=周日）</td>
-                </tr>
-              </table>
-              <p><b>常用符号</b>：</p>
-              <p><code>*</code> 表示任意值</p>
-              <p><code>/</code> 表示步长，如 <code>*/10</code> 表示每 10 分钟</p>
-              <p><code>-</code> 表示范围，如 <code>9-17</code> 表示 9 到 17 点</p>
-              <p><code>,</code> 表示多个值，如 <code>8,12,18</code> 表示 8、12、18 点</p>
-              <p><b>常用示例</b>：</p>
-              <p><code>0 2 * * *</code> → 每天凌晨 2:00</p>
-              <p><code>*/30 * * * *</code> → 每 30 分钟</p>
-              <p><code>0 */4 * * *</code> → 每 4 小时整点</p>
-              <p><code>0 9 * * 1-5</code> → 工作日 9:00</p>
-              <p><code>0 3 * * 1</code> → 每周一 3:00</p>
-            </div>
-          </details>
-        </div>
+
       </div>
 
       <!-- 推送 API Key -->
@@ -313,50 +272,6 @@ onMounted(() => {
 .header-icon-btn.fetching {
   opacity: 0.5;
   pointer-events: none;
-}
-
-.cron-help {
-  margin-top: 4px;
-}
-.cron-help summary {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-blue);
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.help-content {
-  font-size: 11px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin-top: 8px;
-  padding: 10px 12px;
-  background: var(--bg-neutral);
-  border-radius: var(--radius-input);
-}
-.help-content p {
-  margin: 4px 0;
-}
-.help-content code {
-  background: #e8e8ed;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-}
-.help-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 6px 0;
-}
-.help-content td {
-  padding: 3px 8px;
-  border-bottom: 1px solid #e8e8ed;
-}
-.help-content td:first-child {
-  font-weight: 600;
-  color: var(--text-primary);
 }
 
 .form-grid-2 {
