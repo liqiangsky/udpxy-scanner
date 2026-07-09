@@ -125,25 +125,6 @@ onUnmounted(() => {
   }
 }
 
-.back-btn {
-  background: var(--bg-neutral);
-  border: none;
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: 50%;
-  color: var(--text-primary);
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-.back-btn:active { background: var(--bg-neutral); transform: scale(0.9); }
-.back-btn .material-symbols-outlined {
-  font-size: 18px !important;
-}
-
 .page-title {
   flex: 1;
   text-align: left;
