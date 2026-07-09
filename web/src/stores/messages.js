@@ -94,10 +94,16 @@ export const useMessagesStore = defineStore('messages', () => {
     }
   }
 
-  const markAllRead = async () => {
-    await request.post('/messages/read-all')
-    messages.value.forEach(m => { m.read = true })
-    unreadCount.value = 0
+  const markAllRead = async (msgType = null) => {
+    const params = {}
+    if (msgType) params.msg_type = msgType
+    await request.post('/messages/read-all', null, { params })
+    if (msgType) {
+      messages.value.forEach(m => { if (m.type === msgType) m.read = true })
+    } else {
+      messages.value.forEach(m => { m.read = true })
+    }
+    await fetchUnreadCount()
   }
 
   const deleteMessage = async (msgId) => {
@@ -108,6 +114,22 @@ export const useMessagesStore = defineStore('messages', () => {
     if (wasUnread) {
       unreadCount.value = Math.max(0, unreadCount.value - 1)
     }
+  }
+
+  const deleteAllMessages = async (msgType = null, unreadOnly = false) => {
+    const params = {}
+    if (msgType) params.msg_type = msgType
+    if (unreadOnly) params.unread_only = true
+    await request.post('/messages/delete-all', null, { params })
+    if (msgType) {
+      messages.value = messages.value.filter(m => m.type !== msgType)
+    } else {
+      messages.value = []
+    }
+    total.value = 0
+    currentPage.value = 1
+    totalPages.value = 0
+    await fetchUnreadCount()
   }
 
   return {
@@ -123,5 +145,6 @@ export const useMessagesStore = defineStore('messages', () => {
     markRead,
     markAllRead,
     deleteMessage,
+    deleteAllMessages,
   }
 })

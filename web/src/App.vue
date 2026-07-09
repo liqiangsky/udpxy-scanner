@@ -23,11 +23,6 @@
     </router-link>
   </nav>
 
-  <!-- 未登录时的登录按钮 -->
-  <button v-if="showLoginBtn" class="floating-login" @click="$router.push('/login')">
-    <span class="material-symbols-outlined">login</span>
-    <span>登录</span>
-  </button>
 </template>
 
 <script setup>
@@ -60,39 +55,4 @@ watch(() => authStore.isLoggedIn, (loggedIn) => {
 const showTabbar = computed(() => {
   return authStore.isLoggedIn && !route.meta?.hideNavbar && route.path !== '/login' && !batchSelectActive.value
 })
-
-const showLoginBtn = computed(() => {
-  return !authStore.isLoggedIn && route.path !== '/login'
-})
 </script>
-
-<style scoped>
-.floating-login {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-blue);
-  color: #fff;
-  border: none;
-  border-radius: 28px;
-  padding: 14px 32px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 8px 32px rgba(0, 122, 255, 0.3);
-  transition: all 0.2s ease;
-  z-index: 99;
-}
-
-.floating-login:active {
-  transform: translateX(-50%) scale(0.96);
-}
-
-.floating-login .material-symbols-outlined {
-  font-size: 20px !important;
-}
-</style>

@@ -11,6 +11,10 @@
         </div>
         <div class="header-filters">
           <RegionFilter v-model="filterForm.geoRegion" />
+          <button class="clear-all-btn" :disabled="totalCount === 0 || clearing" @click="handleClearAll" title="全部删除">
+            <span v-if="clearing" class="material-symbols-outlined icon-g spinning">sync</span>
+            <span v-else class="material-symbols-outlined icon-g">delete_sweep</span>
+          </button>
         </div>
       </div>
     </div>
@@ -175,6 +179,7 @@ import RegionFilter from '@/components/RegionFilter.vue'
 const filterForm = reactive({ geoRegion: '' })
 const loading = ref(false)
 const loadingMore = ref(false)
+const clearing = ref(false)
 const dataList = ref([])
 const totalCount = ref(0)
 const currentPage = ref(1)
@@ -262,6 +267,30 @@ const handleCheckOnline = async (item) => {
     toast.warning('检测失败')
   } finally {
     item._checking = false
+  }
+}
+
+const handleClearAll = async () => {
+  if (totalCount.value === 0 || clearing.value) return
+  const count = totalCount.value
+  const confirmed = confirm(`确定要删除全部 ${count} 个游离主机吗？\n\n此操作不可恢复。`)
+  if (!confirmed) return
+  clearing.value = true
+  try {
+    const res = await request.post('/source-cache/clear-orphans')
+    if (res.ok) {
+      toast.success(`已删除 ${res.deleted} 个游离主机`)
+      dataList.value = []
+      totalCount.value = 0
+      selection.clear()
+      exitSelectMode()
+    } else {
+      toast.error(res.error || '清空失败')
+    }
+  } catch {
+    /* 错误由拦截器统一提示 */
+  } finally {
+    clearing.value = false
   }
 }
 
@@ -429,6 +458,25 @@ onBeforeUnmount(() => {
   }
 }
 
+.back-btn {
+  background: var(--bg-neutral);
+  border: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.back-btn:active { background: var(--bg-neutral); transform: scale(0.9); }
+.back-btn .material-symbols-outlined {
+  font-size: 18px !important;
+}
+
 .page-title {
   flex: 1;
   text-align: left;
@@ -482,6 +530,33 @@ onBeforeUnmount(() => {
 .apple-select-sm:active,
 .apple-select-sm:hover {
   background-color: #e8e8ed;
+}
+
+/* 全部删除按钮 — 与订阅页顶部图标按钮一致 */
+.clear-all-btn {
+  background: var(--color-red);
+  color: #fff;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.clear-all-btn:active:not(:disabled) {
+  transform: scale(0.9);
+}
+.clear-all-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.clear-all-btn .icon-g {
+  color: #fff;
+  font-size: 18px !important;
 }
 
 /* 列表 */

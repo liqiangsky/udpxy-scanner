@@ -1,1 +1,19 @@
 .idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# OS
+.DS_Store
+Thumbs.db

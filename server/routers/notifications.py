@@ -1,12 +1,13 @@
 """
 消息中心路由：SSE 实时推送 + 消息 CRUD
 """
+import asyncio
 import logging
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from services.event_bus import event_bus
 from services.message_service import (
-    get_messages, mark_read, delete_message, get_unread_count
+    get_messages, mark_read, delete_message, delete_all_messages, get_unread_count
 )
 from routers.auth import _sessions, SESSION_TTL
 
@@ -33,6 +34,11 @@ async def sse_events(token: str = Query("")):
     """SSE 实时事件推送。前端用 EventSource('/api/events?token=xxx') 连接"""
     if not _verify_token(token):
         raise HTTPException(401, "未认证")
+
+    # 注册当前任务以便服务器关闭时能强制取消
+    current_task = asyncio.current_task()
+    if current_task:
+        event_bus.register_sse_task(current_task)
 
     # 传入 token 校验回调，每 30s 心跳时自动重验
     return StreamingResponse(
@@ -71,9 +77,9 @@ def api_mark_read(msg_id: int):
 
 
 @router.post("/messages/read-all")
-def api_mark_read_all():
-    """标记全部已读"""
-    mark_read(all=True)
+def api_mark_read_all(msg_type: str = Query(None)):
+    """标记全部已读，可选按消息类型筛选"""
+    mark_read(all=True, msg_type=msg_type)
     return {"ok": True}
 
 
@@ -81,4 +87,11 @@ def api_mark_read_all():
 def api_delete_message(msg_id: int):
     """删除单条消息"""
     delete_message(msg_id)
+    return {"ok": True}
+
+
+@router.post("/messages/delete-all")
+def api_delete_all_messages(msg_type: str = Query(None), unread_only: bool = Query(False)):
+    """批量删除消息，可选按消息类型/未读筛选"""
+    delete_all_messages(msg_type=msg_type, unread_only=unread_only)
     return {"ok": True}

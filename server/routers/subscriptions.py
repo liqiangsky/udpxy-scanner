@@ -6,6 +6,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from db.database import get_db
 from db.models import ApiSubscriptionCreate
+from core.status import task_runner
 from services.source_cache import process_source_data
 from services.subscription_fetcher import fetch_subscription
 from services.message_service import create_message, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_ERROR
@@ -88,25 +89,31 @@ def api_fetch_subscription(sub_id: int):
     if not row:
         raise HTTPException(404, "订阅未启用或不存在")
 
+    if not task_runner.start_fetch(sub_id):
+        raise HTTPException(400, f"订阅(id={sub_id})正在拉取中，请稍后")
+
     sub_info = dict(row)
 
     def run_fetch():
-        async def _do():
-            logger.info(f"📡 开始拉取订阅 {sub_info['name']}")
-            sources = await fetch_subscription(sub_info["name"], sub_info["uid"], sub_info["url"])
-            if sources:
-                hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-                await process_source_data(sub_info["uid"], hosts_data)
-            with get_db() as conn:
-                conn.execute(
-                    "UPDATE subscription SET lastFetchAt=? WHERE id=?",
-                    (int(time.time()), sub_info["id"])
-                )
-            logger.info(f"✅ 订阅 {sub_info['name']} 拉取完成")
-            if sources:
-                create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_info['name']}", f"获取到 {len(sources)} 条数据", "订阅管理")
-        # Python 3.10+ 中 asyncio.run() 可安全地从非主线程调用（自动创建新事件循环）
-        asyncio.run(_do())
+        try:
+            async def _do():
+                logger.info(f"📡 开始拉取订阅 {sub_info['name']}")
+                sources = await fetch_subscription(sub_info["name"], sub_info["uid"], sub_info["url"])
+                if sources:
+                    hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
+                    await process_source_data(sub_info["uid"], hosts_data)
+                with get_db() as conn:
+                    conn.execute(
+                        "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                        (int(time.time()), sub_info["id"])
+                    )
+                logger.info(f"✅ 订阅 {sub_info['name']} 拉取完成")
+                if sources:
+                    create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_info['name']}", f"获取到 {len(sources)} 条数据", "订阅管理")
+            # Python 3.10+ 中 asyncio.run() 可安全地从非主线程调用（自动创建新事件循环）
+            asyncio.run(_do())
+        finally:
+            task_runner.finish_fetch(sub_id)
 
     threading.Thread(target=run_fetch, daemon=True).start()
     return {"ok": True, "msg": f"已启动拉取：{sub_info['name']}"}
@@ -123,25 +130,39 @@ def api_fetch_all_subscriptions():
     if not rows:
         raise HTTPException(400, "无启用订阅")
 
+    # 预检查所有订阅是否不在拉取中
+    for r in rows:
+        if not task_runner.start_fetch(r["id"]):
+            # 回滚已标记的
+            for r2 in rows:
+                if r2["id"] == r["id"]:
+                    break
+                task_runner.finish_fetch(r2["id"])
+            raise HTTPException(400, f"订阅(id={r['id']})正在拉取中，请稍后")
+
     def run_all():
-        async def _do_all():
-            results = await asyncio.gather(*(
-                _fetch_single(dict(r)) for r in rows
-            ), return_exceptions=True)
+        try:
+            async def _do_all():
+                results = await asyncio.gather(*(
+                    _fetch_single(dict(r)) for r in rows
+                ), return_exceptions=True)
 
-            now = int(time.time())
-            with get_db() as conn:
-                for row in rows:
-                    conn.execute(
-                        "UPDATE subscription SET lastFetchAt=? WHERE id=?",
-                        (now, row["id"])
-                    )
-            success = sum(1 for r in results if isinstance(r, int))
-            logger.info(f"✅ 全部拉取完成: {success}/{len(rows)} 个成功")
-            if success > 0:
-                create_message(MSG_TYPE_SUCCESS, f"批量拉取完成", f"{success}/{len(rows)} 个订阅拉取成功", "订阅管理")
+                now = int(time.time())
+                with get_db() as conn:
+                    for row in rows:
+                        conn.execute(
+                            "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                            (now, row["id"])
+                        )
+                success = sum(1 for r in results if isinstance(r, int))
+                logger.info(f"✅ 全部拉取完成: {success}/{len(rows)} 个成功")
+                if success > 0:
+                    create_message(MSG_TYPE_SUCCESS, f"批量拉取完成", f"{success}/{len(rows)} 个订阅拉取成功", "订阅管理")
 
-        asyncio.run(_do_all())
+            asyncio.run(_do_all())
+        finally:
+            for r in rows:
+                task_runner.finish_fetch(r["id"])
 
     threading.Thread(target=run_all, daemon=True).start()
     return {"ok": True, "msg": "已启动全部拉取"}

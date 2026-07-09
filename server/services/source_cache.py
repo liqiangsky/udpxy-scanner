@@ -5,7 +5,7 @@
 import logging
 import time
 from typing import List, Optional
-from db.database import get_db
+from db.database import get_db, db_write_lock
 
 logger = logging.getLogger("数据缓存")
 
@@ -18,25 +18,26 @@ def cache_sources(source_type: str, sources: List[dict]):
 
     now = int(time.time())
 
-    with get_db() as conn:
-        seen = set()
-        rows = []
-        for s in sources:
-            if s["host"] in seen:
-                continue
-            region = s.get("geoRegion", "")
-            if not region or region not in _CN_REGIONS:
-                continue
-            seen.add(s["host"])
-            rows.append((source_type, s["host"], region, s.get("geoOperator", ""), 1, now, now))
+    with db_write_lock:
+        with get_db() as conn:
+            seen = set()
+            rows = []
+            for s in sources:
+                if s["host"] in seen:
+                    continue
+                region = s.get("geoRegion", "")
+                if not region or region not in _CN_REGIONS:
+                    continue
+                seen.add(s["host"])
+                rows.append((source_type, s["host"], region, s.get("geoOperator", ""), 1, now, now))
 
-        if rows:
-            conn.executemany(
-                "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                rows
-            )
-            regions = set(r[2] for r in rows)
-            logger.info(f"💾 {source_type} 写入 {len(rows)} 条, 地区分布: {regions}")
+            if rows:
+                conn.executemany(
+                    "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    rows
+                )
+                regions = set(r[2] for r in rows)
+                logger.info(f"💾 {source_type} 写入 {len(rows)} 条, 地区分布: {regions}")
 
 
 def get_cached_hosts(source_type: str, region: str = "") -> List[str]:

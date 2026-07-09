@@ -4,6 +4,9 @@ import time
 import threading
 from contextlib import contextmanager
 
+# 全局 SQLite 写锁：序列化所有并发写入，防止 database is locked
+db_write_lock = threading.Lock()
+
 DB_PATH = os.getenv("DB_PATH", "data.db")
 
 _settings_cache = {}
@@ -148,7 +151,7 @@ def init_db():
 
         default_hash = "pbkdf2$" + hashlib.pbkdf2_hmac(
             "sha256",
-            os.getenv("UDPXY_SCANNER_PASSWORD", "admin").encode(),
+            os.getenv("PASSWORD", "admin").encode(),
             b"udpxy-scanner-password-salt",
             100000
         ).hex()

@@ -68,6 +68,12 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    }
+    return { top: 0 }
+  },
 })
 
 // 路由守卫：未登录时跳转到登录页（仅 meta.public 的路由可匿名访问）

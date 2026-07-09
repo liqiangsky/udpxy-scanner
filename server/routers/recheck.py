@@ -7,7 +7,7 @@ router = APIRouter()
 @router.post("/recheck")
 async def api_recheck():
     """
-    手动触发活源复测（二次验证模式）。
+    手动触发主机复测（二次验证模式）。
     后台异步执行，不阻塞返回。
     """
     from fastapi import HTTPException

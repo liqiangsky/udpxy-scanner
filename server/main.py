@@ -58,6 +58,8 @@ async def system_lifespan(app: FastAPI):
     task = asyncio.create_task(heartbeat_scheduler())
     yield
     task.cancel()
+    # 关闭所有 SSE 连接，让 Uvicorn 能优雅退出，避免按两次 Ctrl+C
+    event_bus.clear_all()
 
 app = FastAPI(title="udpxy-scanner", lifespan=system_lifespan)
 
@@ -123,7 +125,7 @@ async def wrap_api_response(request, call_next):
 app.include_router(auth.router, prefix="/api", tags=["认证"])
 app.include_router(settings.router, prefix="/api", tags=["全局设置"])
 app.include_router(configs.router, prefix="/api", tags=["扫描配置"])
-app.include_router(hosts.router, prefix="/api", tags=["纯净活源池"])
+app.include_router(hosts.router, prefix="/api", tags=["纯净主机池"])
 app.include_router(heartbeat.router, prefix="/api", tags=["心跳保活"])
 app.include_router(recheck.router, prefix="/api", tags=["复测任务"])
 app.include_router(subscriptions.router, prefix="/api", tags=["数据源订阅"])

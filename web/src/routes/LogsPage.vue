@@ -125,6 +125,25 @@ onUnmounted(() => {
   }
 }
 
+.back-btn {
+  background: var(--bg-neutral);
+  border: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.back-btn:active { background: var(--bg-neutral); transform: scale(0.9); }
+.back-btn .material-symbols-outlined {
+  font-size: 18px !important;
+}
+
 .page-title {
   flex: 1;
   text-align: left;
@@ -136,10 +155,10 @@ onUnmounted(() => {
 .refresh-btn {
   background: #e5e5ea;
   border: none;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -147,7 +166,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 .refresh-btn .material-symbols-outlined {
-  font-size: 20px !important;
+  font-size: 18px !important;
   color: var(--text-muted);
 }
 .refresh-btn:active {

@@ -539,15 +539,18 @@ onUnmounted(() => {
 .primary-btn {
   background: var(--color-blue);
   color: #ffffff;
-  padding: 8px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  font-size: 13.5px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 .primary-btn:active {
-  transform: scale(0.96);
+  transform: scale(0.9);
   background: #0066d6;
 }
 .icon-g-btn {

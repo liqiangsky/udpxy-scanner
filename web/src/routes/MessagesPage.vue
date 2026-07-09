@@ -9,26 +9,10 @@
         <div class="filter-counter-top">
           <span>{{ store.total }}</span> 条
         </div>
-        <button v-if="store.unreadCount > 0" class="read-all-btn" @click="handleMarkAllRead">
-          全部已读
-        </button>
       </div>
     </div>
 
     <div class="header-spacer"></div>
-
-    <div class="filter-tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="tab-btn"
-        :class="{ active: activeTab === tab.key }"
-        @click="switchTab(tab.key)"
-      >
-        {{ tab.label }}
-        <span v-if="tab.key === 'unread' && store.unreadCount > 0" class="tab-badge">{{ store.unreadCount }}</span>
-      </button>
-    </div>
 
     <div class="list-wrapper">
       <div v-if="loading" class="skeleton-list">
@@ -52,14 +36,11 @@
                 <span class="material-symbols-outlined">{{ iconMap[msg.type] || 'info' }}</span>
               </span>
               <div class="card-body">
-                <div class="card-title">{{ msg.title }}</div>
+                <div class="card-title" :class="{ 'title-unread': !msg.read }">{{ msg.title }}</div>
                 <div class="card-time">{{ formatTime(msg.createdAt) }}</div>
               </div>
             </div>
             <div class="card-actions" @click.stop>
-              <button v-if="!msg.read" class="action-sm mark-read" @click="store.markRead(msg.id)" title="标为已读">
-                <span class="material-symbols-outlined">check</span>
-              </button>
               <button class="action-sm delete" @click="handleDelete(msg)" title="删除">
                 <span class="material-symbols-outlined">delete</span>
               </button>
@@ -89,6 +70,21 @@
         </div>
       </template>
     </div>
+
+    <!-- 底部操作栏 -->
+    <Transition name="batch-bar">
+      <div v-if="store.total > 0" class="bottom-actions">
+        <button class="bottom-action-btn" @click="handleMarkAllRead">
+          <span class="material-symbols-outlined">checklist</span>
+          <span>全部已读</span>
+        </button>
+        <div class="bottom-action-divider"></div>
+        <button class="bottom-action-btn delete-color" @click="handleDeleteAll">
+          <span class="material-symbols-outlined">delete_sweep</span>
+          <span>全部删除</span>
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -100,15 +96,6 @@ import { toast } from '@/components/Toast'
 const store = useMessagesStore()
 const loading = ref(false)
 const loadingMore = ref(false)
-const activeTab = ref('all')
-
-const tabs = [
-  { key: 'all', label: '全部' },
-  { key: 'unread', label: '未读' },
-  { key: 'success', label: '成功' },
-  { key: 'warning', label: '警告' },
-  { key: 'error', label: '错误' },
-]
 
 const iconMap = {
   success: 'check_circle',
@@ -135,35 +122,11 @@ const handleClick = async (msg) => {
   }
 }
 
-const switchTab = async (key) => {
-  activeTab.value = key
-  loading.value = true
-  try {
-    if (key === 'unread') {
-      await store.fetchMessages(1, true)
-    } else if (key === 'all') {
-      await store.fetchMessages(1)
-    } else {
-      await store.fetchMessages(1, false, key)
-    }
-  } catch {
-    // 错误由拦截器处理
-  } finally {
-    loading.value = false
-  }
-}
-
 const loadMore = async () => {
   loadingMore.value = true
   try {
     const nextPage = store.currentPage + 1
-    if (activeTab.value === 'unread') {
-      await store.fetchMessages(nextPage, true)
-    } else if (activeTab.value === 'all') {
-      await store.fetchMessages(nextPage)
-    } else {
-      await store.fetchMessages(nextPage, false, activeTab.value)
-    }
+    await store.fetchMessages(nextPage)
   } catch {
     // 错误由拦截器处理
   } finally {
@@ -179,6 +142,13 @@ const handleMarkAllRead = async () => {
 const handleDelete = async (msg) => {
   await store.deleteMessage(msg.id)
   toast.success('已删除')
+}
+
+const handleDeleteAll = async () => {
+  const count = store.total
+  if (!confirm(`确定要删除全部 ${count} 条消息吗？\n\n此操作不可恢复。`)) return
+  await store.deleteAllMessages()
+  toast.success('已删除全部消息')
 }
 
 onMounted(() => {
@@ -225,19 +195,23 @@ onMounted(() => {
 }
 
 .back-btn {
-  background: none;
+  background: var(--bg-neutral);
   border: none;
-  width: 32px;
-  height: 32px;
-  display: flex;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   border-radius: 50%;
   color: var(--text-primary);
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
-.back-btn:active { background: var(--bg-neutral); }
+.back-btn:active { background: var(--bg-neutral); transform: scale(0.9); }
+.back-btn .material-symbols-outlined {
+  font-size: 18px !important;
+}
 
 .header-right {
   display: flex;
@@ -256,54 +230,6 @@ onMounted(() => {
   font-weight: 700;
 }
 
-.read-all-btn {
-  background: none;
-  border: none;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-blue);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-/* 分类标签行 */
-.filter-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 8px 16px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.filter-tabs::-webkit-scrollbar { display: none; }
-
-.tab-btn {
-  flex-shrink: 0;
-  background: var(--bg-neutral);
-  border: none;
-  padding: 6px 14px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.tab-btn.active {
-  background: var(--color-blue);
-  color: #fff;
-}
-.tab-badge {
-  background: rgba(255, 255, 255, 0.3);
-  padding: 0 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  line-height: 16px;
-}
-
 /* 列表 — 与 OrphanHostsPage 一致的 grid 布局 */
 .list-wrapper {
   display: grid;
@@ -311,7 +237,7 @@ onMounted(() => {
   gap: 14px;
   width: 100%;
   max-width: var(--max-content);
-  padding-bottom: 40px;
+  padding-bottom: 80px;
 }
 @media (min-width: 768px) {
   .list-wrapper { max-width: 720px; }
@@ -334,10 +260,16 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
   cursor: pointer;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 .notif-card.unread {
-  border-color: rgba(0, 122, 255, 0.2);
+  background: #f0f7ff;
+  border-color: rgba(0, 122, 255, 0.25);
+}
+
+/* 未读标题加粗 */
+.title-unread {
+  font-weight: 700 !important;
 }
 
 .card-top-row {
@@ -410,14 +342,6 @@ onMounted(() => {
 .action-sm:active { transform: scale(0.9); }
 .action-sm .material-symbols-outlined { font-size: 16px; }
 
-.action-sm.mark-read {
-  background: #e3f2fd;
-  color: var(--color-blue);
-}
-.action-sm.mark-read:active {
-  background: #bbdefb;
-}
-
 .action-sm.delete {
   background: #fdecea;
   color: #e5484d;
@@ -470,5 +394,67 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-muted);
   padding: 8px 0;
+}
+
+/* 底部操作栏 — 与 OrphanHostsPage 的 batch-tabbar 一致 */
+.bottom-actions {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  min-width: 240px;
+  height: 52px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(40px) saturate(180%);
+  border-radius: 20px;
+  box-shadow: var(--shadow-tabbar);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 99;
+  margin-bottom: env(safe-area-inset-bottom);
+}
+.bottom-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-blue);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+}
+.bottom-action-btn:active {
+  transform: scale(0.92);
+}
+.bottom-action-btn.delete-color {
+  color: var(--color-red);
+}
+.bottom-action-btn .material-symbols-outlined {
+  font-size: 22px !important;
+}
+.bottom-action-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.batch-bar-enter-active,
+.batch-bar-leave-active {
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.batch-bar-enter-from,
+.batch-bar-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
 }
 </style>

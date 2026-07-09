@@ -216,14 +216,16 @@ const handleDeleteSub = async (sub) => {
 }
 
 const handleToggleEnabled = async (sub) => {
+  const wasEnabled = sub.enabled
   try {
     await request.put(`/subscriptions/${sub.id}`, {
       name: sub.name?.trim(),
       uid: sub.uid?.trim(),
       url: sub.url?.trim(),
       fetchCron: (sub.fetchCron || '').trim(),
-      enabled: !sub.enabled,
+      enabled: !wasEnabled,
     })
+    toast.success(wasEnabled ? '已停用' : '已启用')
     await loadSubscriptions()
   } catch {
     /* 错误由拦截器统一提示 */
@@ -496,8 +498,15 @@ input:checked + .slider:before {
 .primary-btn {
   background: var(--color-blue);
   color: #fff;
-  padding: 8px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 .icon-g-btn {
   font-size: 18px !important;
@@ -508,6 +517,11 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.primary-btn:active {
+  transform: scale(0.9);
+  background: #0066d6;
 }
 
 /* 一键拉取按钮 */

@@ -258,6 +258,15 @@ def api_cache_delete(data: SourceCacheDelete):
     return {"ok": True}
 
 
+@router.post("/source-cache/clear-orphans")
+def api_cache_clear_orphans():
+    """清空所有游离主机（active=0）"""
+    with get_db() as conn:
+        deleted = conn.execute("DELETE FROM cache WHERE active=0").rowcount
+    logger.info(f"🗑️ [清空游离] 删除了 {deleted} 条")
+    return {"ok": True, "deleted": deleted}
+
+
 @router.post("/source/push")
 async def api_source_push(request: Request):
     """

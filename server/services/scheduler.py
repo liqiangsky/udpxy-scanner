@@ -8,8 +8,8 @@ import time
 import asyncio
 import aiohttp
 import logging
-from db.database import get_db, get_setting
-from core.engine import trigger_background_queue, _db_write_lock
+from db.database import get_db, get_setting, db_write_lock
+from core.engine import trigger_background_queue
 from core.status import task_runner
 from services.message_service import create_message, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_INFO
 
@@ -66,7 +66,7 @@ def _should_exec(task_key: str, now: datetime.datetime) -> bool:
 
 async def execute_recheck() -> int:
     """
-    执行活源复测（二次验证模式）。
+    执行主机复测（二次验证模式）。
     使用 verify_single_host 与扫描逻辑保持一致：尝试 rtp/udp 两种协议，仅接受 status 200。
     首次失败进入失败列表，全部完成后二次复测，仍失败则彻底删除。
     返回淘汰数量。
@@ -84,7 +84,7 @@ async def execute_recheck() -> int:
 
     task_runner.set_rechecking()
     try:
-        logger.info(f"🧹 [复测] 开始复测 {len(active_sources)} 个活源")
+        logger.info(f"🧹 [复测] 开始复测 {len(active_sources)} 个主机")
 
         timeout = aiohttp.ClientTimeout(total=timeout_sec)
         connector = aiohttp.TCPConnector(limit=256, ttl_dns_cache=300, ssl=False)
@@ -116,7 +116,7 @@ async def execute_recheck() -> int:
             await asyncio.gather(*(recheck_worker(s) for s in active_sources))
 
             if success_items:
-                with _db_write_lock:
+                with db_write_lock:
                     with get_db() as conn:
                         conn.executemany(
                             "UPDATE host SET delay=?, updatedAt=?, protocol=? WHERE id=?",
@@ -155,7 +155,7 @@ async def execute_recheck() -> int:
                 await asyncio.gather(*(second_recheck(s) for s in failed_list))
 
                 if second_success:
-                    with _db_write_lock:
+                    with db_write_lock:
                         with get_db() as conn:
                             conn.executemany(
                                 "UPDATE host SET delay=?, updatedAt=?, protocol=? WHERE id=?",
@@ -164,7 +164,7 @@ async def execute_recheck() -> int:
                     logger.info(f"✅ [二次恢复] {len(second_success)} 个二次复测成功")
 
                 if second_failed_ids:
-                    with _db_write_lock:
+                    with db_write_lock:
                         with get_db() as conn:
                             conn.executemany(
                                 "DELETE FROM host WHERE id=?",
@@ -177,13 +177,13 @@ async def execute_recheck() -> int:
                             )
                     eliminated = len(second_failed_ids)
                     eliminated_hosts_str = ', '.join(second_failed_hosts)
-                    logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个源（两次复测均失败）: {eliminated_hosts_str}")
+                    logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个主机（两次复测均失败）: {eliminated_hosts_str}")
 
-            logger.info(f"🧹 [复测完成] {len(active_sources)} 个活源复测完毕，淘汰 {eliminated} 个")
+            logger.info(f"🧹 [复测完成] {len(active_sources)} 个主机复测完毕，淘汰 {eliminated} 个")
             if eliminated > 0:
-                create_message(MSG_TYPE_WARNING, f"复测完成：淘汰 {eliminated} 个源", f"{len(active_sources)} 个活源复测完毕，{eliminated} 个已不可达已清除", "复测任务")
+                create_message(MSG_TYPE_WARNING, f"复测完成：淘汰 {eliminated} 个主机", f"{len(active_sources)} 个主机复测完毕，{eliminated} 个已不可达已清除", "复测任务")
             else:
-                create_message(MSG_TYPE_SUCCESS, f"复测完成：全部 {len(active_sources)} 个源均可用", f"{len(active_sources)} 个活源复测完毕，全部在线", "复测任务")
+                create_message(MSG_TYPE_SUCCESS, f"复测完成：全部 {len(active_sources)} 个主机均可用", f"{len(active_sources)} 个主机复测完毕，全部在线", "复测任务")
             return eliminated
     finally:
         task_runner.clear_rechecking()
@@ -222,8 +222,10 @@ async def handle_heartbeat() -> dict:
                 asyncio.run(execute_recheck())
             threading.Thread(target=run_recheck, daemon=True).start()
             triggered.append({"task": "recheck", "status": "started"})
+        else:
+            logger.info("⏭️ [心跳复测跳过] 有运行中的任务，等待下次触发")
 
-    # 订阅源定时拉取（并发）
+    # 订阅源定时拉取（与扫描/复测独立运行，互不阻塞）
     with get_db() as conn:
         subscription = conn.execute(
             "SELECT * FROM subscription WHERE enabled=1 AND fetchCron!=''"
@@ -231,23 +233,33 @@ async def handle_heartbeat() -> dict:
 
     async def _fetch_and_process(sub_dict):
         fetch_cron = sub_dict["fetchCron"]
-        if not cron_match(fetch_cron, cron_now) or not _should_exec(f"sub_{sub_dict['id']}", now):
+        sub_id = sub_dict["id"]
+        if not cron_match(fetch_cron, cron_now) or not _should_exec(f"sub_{sub_id}", now):
             return None
+        # 原子检查并标记拉取状态，防止与手动拉取冲突
+        if not task_runner.start_fetch(sub_id):
+            logger.info(f"⏭️ [订阅跳过] {sub_dict['name']}(id={sub_id}) 已在拉取中，等待下次触发")
+            return (sub_dict, -1)  # -1 表示跳过
         logger.info(f"⏰ 订阅触发 {sub_dict['name']} -> cron: {fetch_cron}")
-        from services.subscription_fetcher import fetch_subscription
-        from services.source_cache import process_source_data
-        sources = await fetch_subscription(sub_dict["name"], sub_dict["uid"], sub_dict["url"])
-        if sources:
-            hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-            await process_source_data(sub_dict["uid"], hosts_data)
-            create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_dict['name']}", f"获取到 {len(sources)} 条数据", "定时任务")
-        return (sub_dict, len(sources) if sources else 0)
+        try:
+            from services.subscription_fetcher import fetch_subscription
+            from services.source_cache import process_source_data
+            sources = await fetch_subscription(sub_dict["name"], sub_dict["uid"], sub_dict["url"])
+            if sources:
+                hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
+                await process_source_data(sub_dict["uid"], hosts_data)
+                create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_dict['name']}", f"获取到 {len(sources)} 条数据", "定时任务")
+            return (sub_dict, len(sources) if sources else 0)
+        finally:
+            task_runner.finish_fetch(sub_id)
 
     sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub)) for sub in subscription))
     for result in sub_results:
         if result is None:
             continue
         sub_dict, source_count = result
+        if source_count == -1:
+            continue  # 跳过
         with get_db() as conn:
             conn.execute(
                 "UPDATE subscription SET lastFetchAt=? WHERE id=?",

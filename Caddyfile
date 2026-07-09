@@ -1,0 +1,33 @@
+# Caddy 配置 — 自动 HTTPS 反向代理到前端 Nginx
+#
+# 使用方式（二选一）:
+#   1. 在 .env 文件中写入 DOMAIN=example.com，然后:
+#      docker compose --profile caddy up -d
+#
+#   2. 直接命令行传入:
+#      DOMAIN=example.com docker compose --profile caddy up -d
+#
+# 可选: 在 .env 中设置 EMAIL=admin@example.com 用于 Let's Encrypt 证书过期提醒
+# 注意: DOMAIN 必须设置且 DNS 已解析到本机，否则 Caddy 无法获取证书
+
+{$DOMAIN} {
+    # Let's Encrypt 申请通知邮箱（可选）
+    tls {$EMAIL:}
+
+    # 反向代理到前端 Nginx
+    reverse_proxy frontend:80 {
+        # 透传客户端真实 IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # 安全响应头
+    header {
+        # 强制浏览器始终使用 HTTPS（有效期 1 年）
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}

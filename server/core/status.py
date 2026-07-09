@@ -24,6 +24,28 @@ class TaskRunnerStatus:
         self._rechecking = False
         self._pause_recheck = False
 
+        # 订阅拉取追踪
+        self._fetching_subs = set()
+        self._fetching_subs_lock = threading.Lock()
+
+    def start_fetch(self, sub_id: int) -> bool:
+        """标记订阅开始拉取，返回 False 表示已在拉取中"""
+        with self._fetching_subs_lock:
+            if sub_id in self._fetching_subs:
+                return False
+            self._fetching_subs.add(sub_id)
+            return True
+
+    def finish_fetch(self, sub_id: int):
+        """标记订阅拉取完成"""
+        with self._fetching_subs_lock:
+            self._fetching_subs.discard(sub_id)
+
+    def is_fetching(self, sub_id: int) -> bool:
+        """检查订阅是否正在拉取"""
+        with self._fetching_subs_lock:
+            return sub_id in self._fetching_subs
+
     def start(self, total_count: int, config_ids: list = None):
         # 请求复测暂停，等待已有复测 worker 退出（最多等 10 秒）
         with self._lock:

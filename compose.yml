@@ -9,7 +9,7 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - UDPXY_SCANNER_PASSWORD=admin
+      - PASSWORD=admin
     restart: unless-stopped
 
   frontend:
@@ -22,3 +22,38 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+  # ==========================================
+  # Caddy 自动 HTTPS 反向代理（可选）
+  #
+  # 使用条件: 需要一个已解析到本机的域名
+  # 启用方式: docker compose --profile caddy up -d
+  #
+  # 需要将域名写入 .env 文件:
+  #   DOMAIN=example.com
+  #   EMAIL=admin@example.com（可选，证书过期提醒）
+  #
+  # ⚠️ 启用此 profile 后，如果不需要通过 HTTP 直连，
+  #    可以注释掉上面 frontend 的 ports，避免绕过 HTTPS
+  # ==========================================
+  caddy:
+    image: caddy:latest
+    profiles: ["caddy"]
+    container_name: udpxy-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - DOMAIN=${DOMAIN}
+      - EMAIL=${EMAIL:-}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

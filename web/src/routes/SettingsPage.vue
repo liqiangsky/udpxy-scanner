@@ -89,7 +89,7 @@
           <h2>后台日志</h2>
           <span class="material-symbols-outlined entry-arrow">chevron_right</span>
         </div>
-        <p class="field-desc">查看实时运行日志，支持按级别筛选</p>
+        <p class="field-desc">查看实时运行日志</p>
       </div>
 
       <!-- Cron 表达式帮助 -->

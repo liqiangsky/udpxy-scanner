@@ -102,11 +102,11 @@ def api_get_hosts_pool(
 
 @router.post("/hosts/{source_id}/test-delay")
 async def api_test_delay(source_id: int):
-    """测试单个活源延迟，更新数据库并返回最新延迟"""
+    """测试单个主机延迟，更新数据库并返回最新延迟"""
     row = await run_in_thread(lambda: _fetch_host_source(source_id))
 
     if not row:
-        return {"ok": False, "error": "源不存在"}
+        return {"ok": False, "error": "主机不存在"}
 
     source = dict(row)
     host_val = source["host"]
@@ -156,7 +156,7 @@ def _do_delete_host(source_id: int) -> tuple[bool, str]:
     with get_db() as conn:
         row = conn.execute("SELECT host FROM host WHERE id=?", (source_id,)).fetchone()
         if not row:
-            return False, "源不存在"
+            return False, "主机不存在"
         host = row["host"]
         conn.execute("DELETE FROM host WHERE id=?", (source_id,))
         remaining = conn.execute("SELECT COUNT(*) AS cnt FROM host WHERE host=?", (host,)).fetchone()["cnt"]

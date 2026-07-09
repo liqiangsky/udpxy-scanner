@@ -10,7 +10,7 @@
 | | `config` | 扫描配置（名称、数据源、模板地区/运营商/频道/地址、启用状态） |
 | | `subscription` | API 订阅（名称、uid、URL、cron、启用状态） |
 | | `cache` | host 缓存池（host 唯一，sourceType 记录首次发现来源, geoRegion, geoOperator） |
-| | `host` | 活源池（host+target+channelName 唯一约束） |
+| | `host` | 主机池（host+target+channelName 唯一约束） |
 
 ### 核心模块
 
@@ -89,10 +89,10 @@
 
 ---
 
-## 三、流程 B：扫描配置 → source_cache 过滤 → 验证 → hosts（"活源池"）
+## 三、流程 B：扫描配置 → source_cache 过滤 → 验证 → hosts（"主机池"）
 
 ### 目的
-根据扫描配置的地区条件，从 source_cache 中筛选候选 host，验证流可用性，有效源写入活源池。
+根据扫描配置的地区条件，从 source_cache 中筛选候选 host，验证流可用性，有效主机写入主机池。
 
 ### 触发入口
 
@@ -152,7 +152,7 @@
      → ["10.0.1.1:4022", "10.0.2.3:4022"]  │
         │                                  │
         ▼                                  │
-  ⑤ 去重：排除已在活源池的 host              │
+  ⑤ 去重：排除已在主机池的 host              │
      get_existing_hosts_batch()             │
      = SELECT DISTINCT host                 │
        FROM hosts                           │
@@ -188,7 +188,7 @@
      → geo 为空的不写入 hosts            │
         │                                  │
         ▼                                  │
-  ⑩ 写入活源池                              │
+  ⑩ 写入主机池                              │
      _batch_insert_hosts(batch_rows)        │
      INSERT INTO hosts (                    │
        host, ip, port,                      │
@@ -252,7 +252,7 @@ trigger_background_queue([1, 2, 3])
 ## 四、流程 C：复测淘汰
 
 ### 目的
-定期验证活源池中所有源是否仍然可用，淘汰两次验证均失败的源。
+定期验证主机池中所有主机是否仍然可用，淘汰两次验证均失败的主机。
 
 ### 触发
 
@@ -398,46 +398,46 @@ fetch_subscription(name, uid, url)
 
 ## 八、前端 API 一览
 
-| 接口 | 方法 | 认证 | 用途 |
-|------|------|------|------|
-| `/api/login` | POST | 无 | 登录获取 token |
-| `/api/logout` | POST | Token | 登出 |
-| `/api/settings` | GET | Token | 获取全局设置 |
-| `/api/settings` | PUT | Token | 更新全局设置 |
-| `/api/configs` | GET | Token | 列出扫描配置 |
-| `/api/configs` | POST | Token | 创建扫描配置 |
-| `/api/configs/{id}` | PUT | Token | 更新扫描配置 |
-| `/api/configs/{id}` | DELETE | Token | 删除扫描配置 |
-| `/api/configs/{id}/run` | POST | Token | 启动单个配置扫描 |
-| `/api/configs/{id}/stop` | POST | Token | 停止单个配置 |
-| `/api/configs/stop-all` | POST | Token | 停止整个扫描队列 |
-| `/api/configs/run-all` | POST | Token | 启动所有启用配置 |
-| `/api/configs/progress` | GET | Token | 获取扫描进度 |
-| `/api/data-sources` | GET | Token | 获取已启用数据源列表 |
-| `/api/subscriptions` | GET | Token | 列出订阅 |
-| `/api/subscriptions` | POST | Token | 创建订阅 |
-| `/api/subscriptions/{id}` | PUT | Token | 更新订阅 |
-| `/api/subscriptions/{id}` | DELETE | Token | 删除订阅 |
-| `/api/subscriptions/{id}/fetch` | POST | Token | 手动拉取订阅 |
-| `/api/subscriptions/fetch-all` | POST | Token | 批量拉取订阅 |
-| `/api/hosts` | GET | Token | 查询活源池（分页+筛选） |
-| `/api/hosts/{id}/test-delay` | POST | Token | 测试单个源延迟 |
-| `/api/hosts/{id}` | DELETE | Token | 删除单个源 |
-| `/api/hosts/batch-delete` | POST | Token | 批量删除主机 |
+| 接口 | 方法 | 认证 | 用途              |
+|------|------|------|-----------------|
+| `/api/login` | POST | 无 | 登录获取 token      |
+| `/api/logout` | POST | Token | 登出              |
+| `/api/settings` | GET | Token | 获取全局设置          |
+| `/api/settings` | PUT | Token | 更新全局设置          |
+| `/api/configs` | GET | Token | 列出扫描配置          |
+| `/api/configs` | POST | Token | 创建扫描配置          |
+| `/api/configs/{id}` | PUT | Token | 更新扫描配置          |
+| `/api/configs/{id}` | DELETE | Token | 删除扫描配置          |
+| `/api/configs/{id}/run` | POST | Token | 启动单个配置扫描        |
+| `/api/configs/{id}/stop` | POST | Token | 停止单个配置          |
+| `/api/configs/stop-all` | POST | Token | 停止整个扫描队列        |
+| `/api/configs/run-all` | POST | Token | 启动所有启用配置        |
+| `/api/configs/progress` | GET | Token | 获取扫描进度          |
+| `/api/data-sources` | GET | Token | 获取已启用数据源列表      |
+| `/api/subscriptions` | GET | Token | 列出订阅            |
+| `/api/subscriptions` | POST | Token | 创建订阅            |
+| `/api/subscriptions/{id}` | PUT | Token | 更新订阅            |
+| `/api/subscriptions/{id}` | DELETE | Token | 删除订阅            |
+| `/api/subscriptions/{id}/fetch` | POST | Token | 手动拉取订阅          |
+| `/api/subscriptions/fetch-all` | POST | Token | 批量拉取订阅          |
+| `/api/hosts` | GET | Token | 查询主机池（分页+筛选）    |
+| `/api/hosts/{id}/test-delay` | POST | Token | 测试单个主机延迟        |
+| `/api/hosts/{id}` | DELETE | Token | 删除单个主机          |
+| `/api/hosts/batch-delete` | POST | Token | 批量删除主机          |
 | `/api/source-cache/orphans` | GET | Token | 游离主机列表（分页+地区筛选） |
-| `/api/source-cache/{id}/check-online` | POST | Token | 检测游离主机在线状态 |
-| `/api/source-cache/delete` | POST | Token | 删除缓存数据 |
-| `/api/source/push` | POST | API Key | 外部推送 host |
-| `/api/heartbeat` | POST | 无 | 心跳保活（防止服务器休眠） |
-| `/api/recheck` | POST | Token | 手动触发复测 |
-| `/api/change-password` | POST | Token | 修改密码 |
-| `/api/logs` | GET | Token | 获取最近日志 |
-| `/api/events` | GET | URL Token | SSE 实时事件推送 |
-| `/api/messages` | GET | Token | 获取消息列表（分页+筛选） |
-| `/api/messages/unread-count` | GET | Token | 获取未读消息数 |
-| `/api/messages/{id}/read` | POST | Token | 标记单条已读 |
-| `/api/messages/read-all` | POST | Token | 标记全部已读 |
-| `/api/messages/{id}` | DELETE | Token | 删除单条消息 |
+| `/api/source-cache/{id}/check-online` | POST | Token | 检测游离主机在线状态      |
+| `/api/source-cache/delete` | POST | Token | 删除缓存数据          |
+| `/api/source/push` | POST | API Key | 外部推送 host       |
+| `/api/heartbeat` | POST | 无 | 心跳保活（防止服务器休眠）   |
+| `/api/recheck` | POST | Token | 手动触发复测          |
+| `/api/change-password` | POST | Token | 修改密码            |
+| `/api/logs` | GET | Token | 获取最近日志          |
+| `/api/events` | GET | URL Token | SSE 实时事件推送      |
+| `/api/messages` | GET | Token | 获取消息列表（分页+筛选）   |
+| `/api/messages/unread-count` | GET | Token | 获取未读消息数         |
+| `/api/messages/{id}/read` | POST | Token | 标记单条已读          |
+| `/api/messages/read-all` | POST | Token | 标记全部已读          |
+| `/api/messages/{id}` | DELETE | Token | 删除单条消息          |
 
 ---
 
@@ -477,4 +477,4 @@ docker compose up --build
 | 变量 | 默认值 | 用途 |
 |------|--------|------|
 | `DB_PATH` | `data.db` | 数据库路径（全部表） |
-| `UDPXY_SCANNER_PASSWORD` | `admin` | 默认登录密码 |
+| `PASSWORD` | `admin` | 默认登录密码 |

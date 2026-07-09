@@ -107,11 +107,14 @@ def get_unread_count() -> int:
         return row["cnt"]
 
 
-def mark_read(message_id: int = None, all: bool = False):
-    """标记消息已读"""
+def mark_read(message_id: int = None, all: bool = False, msg_type: str = None):
+    """标记消息已读，支持按消息类型筛选"""
     with get_db() as conn:
         if all:
-            conn.execute("UPDATE notification SET read=1 WHERE read=0")
+            if msg_type:
+                conn.execute("UPDATE notification SET read=1 WHERE read=0 AND type=?", (msg_type,))
+            else:
+                conn.execute("UPDATE notification SET read=1 WHERE read=0")
         elif message_id:
             conn.execute("UPDATE notification SET read=1 WHERE id=?", (message_id,))
 
@@ -119,3 +122,19 @@ def mark_read(message_id: int = None, all: bool = False):
 def delete_message(message_id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM notification WHERE id=?", (message_id,))
+
+
+def delete_all_messages(msg_type: str = None, unread_only: bool = False):
+    """批量删除消息，支持按消息类型和未读筛选"""
+    with get_db() as conn:
+        where = []
+        params = []
+        if unread_only:
+            where.append("read = 0")
+        if msg_type:
+            where.append("type = ?")
+            params.append(msg_type)
+        if where:
+            conn.execute(f"DELETE FROM notification WHERE {' AND '.join(where)}", params)
+        else:
+            conn.execute("DELETE FROM notification")

@@ -6,7 +6,7 @@ import logging
 
 from typing import List
 
-from db.database import get_db, get_setting, run_in_thread
+from db.database import get_db, get_setting, run_in_thread, db_write_lock
 from core.status import task_runner
 from services.source_cache import get_cached_hosts, cache_host_geo_batch, get_existing_hosts_batch
 from services.validator import verify_single_host
@@ -14,9 +14,6 @@ from services.geoip import enrich_geo_batch
 from services.message_service import create_message, MSG_TYPE_INFO, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_ERROR
 
 logger = logging.getLogger("扫描引擎")
-
-# SQLite 写锁：序列化所有并发写入，防止 database is locked
-_db_write_lock = threading.Lock()
 
 
 def _fetch_config(cfg_id: int):
@@ -37,7 +34,7 @@ def _fetch_enabled_subscription():
 def _batch_insert_hosts(batch_rows: list):
     if not batch_rows:
         return
-    with _db_write_lock:
+    with db_write_lock:
         with get_db() as conn:
             conn.executemany("""
                 INSERT INTO host (
@@ -162,21 +159,21 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                     candidate_hosts.extend((h, ds_uid, source_name) for h in hosts)
 
                 if not candidate_hosts:
-                    logger.warning(f"⚠️ [无候选源] {config['name']}(id={cfg_id}) 未搜索到任何候选 host")
+                    logger.warning(f"⚠️ [无候选主机] {config['name']}(id={cfg_id}) 未搜索到任何候选 host")
                 else:
 
                     run_concurrency = global_concurrency
 
                     all_host_items = [h[0] for h in candidate_hosts]
                     existing_hosts = get_existing_hosts_batch(all_host_items)
-                    logger.info(f"🔍 [去重] {len(existing_hosts)}/{len(all_host_items)} 个 host 已在活源池中")
+                    logger.info(f"🔍 [去重] {len(existing_hosts)}/{len(all_host_items)} 个 host 已在主机池中")
 
                     candidate_hosts_filtered = [
                         h for h in candidate_hosts if h[0] not in existing_hosts
                     ]
 
                     if not candidate_hosts_filtered:
-                        logger.info(f"⏭️ [全部重复] {config['name']} 所有候选 host 已在活源池中，跳过验证")
+                        logger.info(f"⏭️ [全部重复] {config['name']} 所有候选 host 已在主机池中，跳过验证")
                     else:
                         logger.info(f"⚡ [验证中] 去重后 {len(candidate_hosts_filtered)} 个候选，并发数={run_concurrency}")
 
@@ -351,11 +348,11 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
         task_runner.finish()
 
         if total_valid > 0:
-            logger.info(f"✅ [队列结束] 共发现 {total_valid} 个有效源")
-            create_message(MSG_TYPE_SUCCESS, f"扫描完成：发现 {total_valid} 个新源", f"本次扫描共发现 {total_valid} 个有效新源", "扫描引擎")
+            logger.info(f"✅ [队列结束] 共发现 {total_valid} 个有效主机")
+            create_message(MSG_TYPE_SUCCESS, f"扫描完成：发现 {total_valid} 个新主机", f"本次扫描共发现 {total_valid} 个有效新源", "扫描引擎")
         else:
-            logger.info(f"📭 [队列结束] 本次扫描未产生新活源")
-            create_message(MSG_TYPE_INFO, "扫描完成：未发现新源", "本次扫描未产生新活源", "扫描引擎")
+            logger.info(f"📭 [队列结束] 本次扫描未产生新主机")
+            create_message(MSG_TYPE_INFO, "扫描完成：未发现新主机", "本次扫描未产生新主机", "扫描引擎")
 
 
 def trigger_background_queue(config_ids: List[int], skip_disabled: bool = False):

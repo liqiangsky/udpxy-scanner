@@ -3,6 +3,7 @@ import logging
 import asyncio
 import os
 import ipaddress
+import threading
 
 import ip2region.searcher as xdb_searcher
 import ip2region.util as xdb_util
@@ -14,20 +15,23 @@ logger = logging.getLogger("GeoIP")
 
 _XDB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "ip2region_v4.xdb")
 _searcher = None
+_init_lock = threading.Lock()
 
 def _get_searcher():
     global _searcher
     if _searcher is None:
-        if not os.path.exists(_XDB_PATH):
-            logger.warning(f"⚠️ [ip2region] xdb 文件不存在: {_XDB_PATH}")
-            return None
-        try:
-            c_buffer = xdb_util.load_content_from_file(_XDB_PATH)
-            _searcher = xdb_searcher.new_with_buffer(xdb_util.IPv4, c_buffer)
-            logger.info(f"✅ [ip2region] 加载成功: {_XDB_PATH}")
-        except Exception as e:
-            logger.error(f"❌ [ip2region] 加载失败: {e}")
-            return None
+        with _init_lock:
+            if _searcher is None:
+                if not os.path.exists(_XDB_PATH):
+                    logger.warning(f"⚠️ [ip2region] xdb 文件不存在: {_XDB_PATH}")
+                    return None
+                try:
+                    c_buffer = xdb_util.load_content_from_file(_XDB_PATH)
+                    _searcher = xdb_searcher.new_with_buffer(xdb_util.IPv4, c_buffer)
+                    logger.info(f"✅ [ip2region] 加载成功: {_XDB_PATH}")
+                except Exception as e:
+                    logger.error(f"❌ [ip2region] 加载失败: {e}")
+                    return None
     return _searcher
 
 
