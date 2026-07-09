@@ -2,8 +2,8 @@
 # 前端 Dockerfile — nginx 独立部署
 # 构建: docker build \
 #   --build-arg VITE_API_BASE=/api \
-#   -t udpxy-frontend -f web/Dockerfile web/
-# 运行: docker run -p 8080:80 udpxy-frontend
+#   -t udpxy-scanner-frontend -f web/Dockerfile web/
+# 运行: docker run -p 8080:80 udpxy-scanner-frontend
 # ==========================================
 FROM node:20-alpine AS builder
 

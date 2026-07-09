@@ -3,7 +3,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: udpxy-backend
+    container_name: udpxy-scanner-backend
     ports:
       - "7860:7860"
     volumes:
@@ -16,7 +16,7 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-    container_name: udpxy-frontend
+    container_name: udpxy-scanner-frontend
     ports:
       - "8080:80"
     depends_on:

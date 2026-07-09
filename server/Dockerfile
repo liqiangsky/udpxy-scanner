@@ -1,7 +1,7 @@
 # ==========================================
 # 后端 Dockerfile — HF Spaces 部署 / 独立运行
-# 构建: docker build -t udpxy-backend .
-# 运行: docker run -p 7860:7860 udpxy-backend
+# 构建: docker build -t udpxy-scanner-backend .
+# 运行: docker run -p 7860:7860 udpxy-scanner-backend
 # ==========================================
 FROM python:3.11-slim-bookworm
 
