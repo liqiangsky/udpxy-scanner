@@ -1,5 +1,12 @@
 import { ref } from 'vue'
 
+/**
+ * API 基础路径
+ * 优先级：运行时注入（Docker env.sh）> 编译时注入（CF Pages）> 默认 ''
+ * 最终结果会自动追加 /api 后缀
+ */
+export const API_BASE = (window.__ENV__?.VITE_BACKEND_URL || import.meta.env.VITE_BACKEND_URL || '') + '/api'
+
 /** 主机页面批量选择模式是否激活 */
 export const batchSelectActive = ref(false)
 

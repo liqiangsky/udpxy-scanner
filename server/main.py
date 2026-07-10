@@ -63,7 +63,7 @@ async def system_lifespan(app: FastAPI):
 
 app = FastAPI(title="udpxy-scanner", lifespan=system_lifespan)
 
-# 跨域设置（使用 X-Auth-Token 认证，无需 allow_credentials）
+# 跨域设置
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -76,9 +76,20 @@ app.add_middleware(
 from routers.auth import _sessions as auth_sessions, SESSION_TTL
 
 
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "*",
+    "Access-Control-Allow-Headers": "*",
+}
+
+
 @app.middleware("http")
 async def check_auth(request, call_next):
     """所有接口需要登录 session 认证"""
+    # OPTIONS 预检请求直接放行，避免 CORS preflight 被认证拦截
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     # 豁免路径：登录、登出、外部推送、心跳保活
     if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/heartbeat", "/api/events"):
         return await call_next(request)
@@ -93,7 +104,7 @@ async def check_auth(request, call_next):
         else:
             del auth_sessions[auth_token]
 
-    return JSONResponse(status_code=401, content={"detail": "未认证"})
+    return JSONResponse(status_code=401, content={"detail": "未认证"}, headers=_CORS_HEADERS)
 
 
 @app.middleware("http")
@@ -118,7 +129,7 @@ async def wrap_api_response(request, call_next):
         detail = data.get("detail", str(response.status_code)) if isinstance(data, dict) else str(data)
         wrapped = {"code": response.status_code, "msg": detail, "data": None}
 
-    return JSONResponse(content=wrapped, status_code=200)
+    return JSONResponse(content=wrapped, status_code=200, headers=_CORS_HEADERS)
 
 
 # 🔌 像插排一样，把各个子路由插进来

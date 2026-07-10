@@ -61,7 +61,9 @@
             :disabled="loadingMore"
             @click="loadMore"
           >
-            <span v-if="loadingMore" class="material-symbols-outlined spinner-icon spinning">sync</span>
+            <span v-if="loadingMore" class="material-symbols-outlined spinner-icon spinning"
+              >sync</span
+            >
             加载更多（剩余 {{ store.total - store.messages.length }} 条）
           </button>
         </div>
@@ -180,10 +182,14 @@ onMounted(() => {
   }
 }
 @media (min-width: 1024px) {
-  .page-header { max-width: 1100px; }
+  .page-header {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .page-header { max-width: 1400px; }
+  .page-header {
+    max-width: 1400px;
+  }
 }
 
 .page-title {
@@ -221,13 +227,19 @@ onMounted(() => {
   padding-bottom: 80px;
 }
 @media (min-width: 768px) {
-  .list-wrapper { max-width: 720px; }
+  .list-wrapper {
+    max-width: 720px;
+  }
 }
 @media (min-width: 1024px) {
-  .list-wrapper { max-width: 1100px; }
+  .list-wrapper {
+    max-width: 1100px;
+  }
 }
 @media (min-width: 1440px) {
-  .list-wrapper { max-width: 1400px; }
+  .list-wrapper {
+    max-width: 1400px;
+  }
 }
 
 /* 通知卡片 — 风格与 hosts-grid-card 一致 */
@@ -279,10 +291,22 @@ onMounted(() => {
 .notif-icon .material-symbols-outlined {
   font-size: 18px !important;
 }
-.icon--success { background: #e8f5e9; color: var(--color-green); }
-.icon--warning { background: #fff3e0; color: var(--color-orange); }
-.icon--error { background: #fdecea; color: var(--color-red); }
-.icon--info { background: #e3f2fd; color: var(--color-blue); }
+.icon--success {
+  background: #e8f5e9;
+  color: var(--color-green);
+}
+.icon--warning {
+  background: #fff3e0;
+  color: var(--color-orange);
+}
+.icon--error {
+  background: #fdecea;
+  color: var(--color-red);
+}
+.icon--info {
+  background: #e3f2fd;
+  color: var(--color-blue);
+}
 
 .card-body {
   flex: 1;
@@ -320,8 +344,12 @@ onMounted(() => {
   color: var(--text-muted);
   transition: all 0.15s;
 }
-.action-sm:active { transform: scale(0.9); }
-.action-sm .material-symbols-outlined { font-size: 16px; }
+.action-sm:active {
+  transform: scale(0.9);
+}
+.action-sm .material-symbols-outlined {
+  font-size: 16px;
+}
 
 .action-sm.delete {
   background: #fdecea;
@@ -362,12 +390,31 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s ease;
 }
-.load-more-btn:active { transform: scale(0.96); background: #e8e8ed; }
-.load-more-btn:disabled { cursor: not-allowed; opacity: 0.7; }
-.spinner-icon { font-size: 16px !important; vertical-align: middle; margin-right: 4px; }
+.load-more-btn:active {
+  transform: scale(0.96);
+  background: #e8e8ed;
+}
+.load-more-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.spinner-icon {
+  font-size: 16px !important;
+  vertical-align: middle;
+  margin-right: 4px;
+}
 
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.spinning { animation: spin 1s linear infinite; }
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
 
 .all-loaded-hint {
   grid-column: 1 / -1;

@@ -97,7 +97,9 @@
         <details class="cron-help-details">
           <summary class="cron-help-summary">
             <div class="card-title-group">
-              <span class="material-symbols-outlined card-icon" style="color: var(--color-orange)">schedule</span>
+              <span class="material-symbols-outlined card-icon" style="color: var(--color-orange)"
+                >schedule</span
+              >
               <h2>Cron 表达式帮助</h2>
               <span class="material-symbols-outlined expand-icon">expand_more</span>
             </div>
@@ -106,15 +108,33 @@
             <p><b>格式</b>：分 时 日 月 周（5 个字段，空格分隔）</p>
             <p><b>取值范围</b>：</p>
             <table>
-              <tr><td>分</td><td>0-59</td></tr>
-              <tr><td>时</td><td>0-23</td></tr>
-              <tr><td>日</td><td>1-31</td></tr>
-              <tr><td>月</td><td>1-12</td></tr>
-              <tr><td>周</td><td>1-7（1=周一，7=周日）</td></tr>
+              <tr>
+                <td>分</td>
+                <td>0-59</td>
+              </tr>
+              <tr>
+                <td>时</td>
+                <td>0-23</td>
+              </tr>
+              <tr>
+                <td>日</td>
+                <td>1-31</td>
+              </tr>
+              <tr>
+                <td>月</td>
+                <td>1-12</td>
+              </tr>
+              <tr>
+                <td>周</td>
+                <td>1-7（1=周一，7=周日）</td>
+              </tr>
             </table>
             <p><b>常用符号</b>：</p>
             <p><code>*</code> 任意值 &nbsp; <code>/</code> 步长如 <code>*/10</code> 每10分钟</p>
-            <p><code>-</code> 范围如 <code>9-17</code> &nbsp; <code>,</code> 多个值如 <code>8,12,18</code></p>
+            <p>
+              <code>-</code> 范围如 <code>9-17</code> &nbsp; <code>,</code> 多个值如
+              <code>8,12,18</code>
+            </p>
             <p><b>常用示例</b>：</p>
             <p><code>* * * * *</code> → 每分钟</p>
             <p><code>*/30 * * * *</code> → 每 30 分钟</p>

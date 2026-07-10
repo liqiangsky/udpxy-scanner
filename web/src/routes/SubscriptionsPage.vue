@@ -3,11 +3,7 @@
     <div class="page-header">
       <h1 class="page-title">订阅</h1>
       <div class="header-actions">
-        <button
-          class="fetch-all-btn"
-          @click="handleFetchAll"
-          title="一键拉取所有订阅"
-        >
+        <button class="fetch-all-btn" @click="handleFetchAll" title="一键拉取所有订阅">
           <span class="material-symbols-outlined icon-g-btn">cloud_download</span>
         </button>
         <button class="action-btn primary-btn" @click="startAddSub">

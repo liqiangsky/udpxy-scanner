@@ -11,11 +11,7 @@
           <OperatorFilter v-model="filterForm.operator" />
         </div>
         <div class="header-actions">
-          <button
-            class="recheck-btn"
-            @click="handleRecheck"
-            title="手动复测"
-          >
+          <button class="recheck-btn" @click="handleRecheck" title="手动复测">
             <span class="material-symbols-outlined icon-g-btn">autorenew</span>
           </button>
         </div>
@@ -46,7 +42,11 @@
           <div class="section-host">
             <div class="host-ip font-mono">{{ source.host }}</div>
             <div class="host-actions">
-              <button v-if="authStore.isLoggedIn" class="action-btn delete-btn" @click.stop="handleDelete(source)">
+              <button
+                v-if="authStore.isLoggedIn"
+                class="action-btn delete-btn"
+                @click.stop="handleDelete(source)"
+              >
                 <span class="material-symbols-outlined icon-g">delete</span>
               </button>
               <button class="copy-btn" @click.stop="handleCopy(source.host)">
@@ -83,30 +83,38 @@
               <span class="badge-lbl">发现</span>
               <div class="time-wrapper">
                 <span class="material-symbols-outlined icon-g">history</span>
-                <span class="badge-txt color-gray font-mono">{{ formatTime(source.createdAt) }}</span>
+                <span class="badge-txt color-gray font-mono">{{
+                  formatTime(source.createdAt)
+                }}</span>
               </div>
             </div>
             <div class="grid-item time-column full-width">
               <span class="badge-lbl">验证</span>
               <div class="time-wrapper">
                 <span class="material-symbols-outlined icon-g">update</span>
-                <span class="badge-txt color-gray font-mono">{{ formatTime(source.updatedAt) }}</span>
+                <span class="badge-txt color-gray font-mono">{{
+                  formatTime(source.updatedAt)
+                }}</span>
               </div>
             </div>
           </div>
         </div>
 
         <div v-show="displayList.length < totalCount" class="load-more-wrap">
-          <button class="load-more-btn" :class="{ 'loading': loadingMore }" :disabled="loadingMore" @click="loadMore">
-            <span v-if="loadingMore" class="material-symbols-outlined spinner-icon spinning">sync</span>
+          <button
+            class="load-more-btn"
+            :class="{ loading: loadingMore }"
+            :disabled="loadingMore"
+            @click="loadMore"
+          >
+            <span v-if="loadingMore" class="material-symbols-outlined spinner-icon spinning"
+              >sync</span
+            >
             加载更多（剩余 {{ totalCount - displayList.length }} 条）
           </button>
         </div>
 
-        <div
-          v-if="displayList.length >= totalCount"
-          class="all-loaded-hint"
-        >
+        <div v-if="displayList.length >= totalCount" class="all-loaded-hint">
           已加载全部 {{ totalCount }} 条
         </div>
       </template>
@@ -128,7 +136,12 @@
           }}</span>
         </button>
         <div class="batch-tab-divider"></div>
-        <button class="batch-tab-item" :class="{ disabled: selection.size === 0 }" :disabled="selection.size === 0" @click="handleBatchDelete">
+        <button
+          class="batch-tab-item"
+          :class="{ disabled: selection.size === 0 }"
+          :disabled="selection.size === 0"
+          @click="handleBatchDelete"
+        >
           <span class="material-symbols-outlined batch-tab-icon delete-color">delete</span>
           <span class="batch-tab-text delete-color">{{
             selection.size > 0 ? `删除(${selection.size})` : '删除'
@@ -239,7 +252,9 @@ const handleBatchDelete = async () => {
     totalCount.value > loadedCount
       ? `\n\n（当前已加载 ${loadedCount} / 共 ${totalCount.value} 项，本次仅删除已加载项中已选中的部分）`
       : ''
-  const confirmed = confirm(`确定要删除 ${selectedCount} 个主机吗？${scopeHint}\n\n此操作不可恢复。`)
+  const confirmed = confirm(
+    `确定要删除 ${selectedCount} 个主机吗？${scopeHint}\n\n此操作不可恢复。`,
+  )
   if (!confirmed) return
 
   const ids = [...selection]
@@ -580,7 +595,9 @@ onBeforeUnmount(() => {
 .batch-tab-icon {
   font-size: 22px !important;
   color: var(--color-blue);
-  font-variation-settings: 'FILL' 0, 'wght' 400;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400;
 }
 .batch-tab-icon.delete-color {
   color: var(--color-red);
@@ -630,7 +647,9 @@ onBeforeUnmount(() => {
 }
 .hosts-grid-card.card-selected {
   border-color: var(--color-blue);
-  box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.15), var(--shadow-md);
+  box-shadow:
+    0 0 0 1px rgba(0, 122, 255, 0.15),
+    var(--shadow-md);
 }
 
 .section-host {
@@ -681,7 +700,9 @@ onBeforeUnmount(() => {
   transform: scale(0.9);
   background: #f5d6d3;
 }
-.delete-btn .icon-g { color: #e5484d; }
+.delete-btn .icon-g {
+  color: #e5484d;
+}
 
 .copy-btn {
   background: #e3f2fd;
@@ -714,7 +735,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
 }
-.grid-item.full-width { grid-column: span 2; }
+.grid-item.full-width {
+  grid-column: span 2;
+}
 
 .badge-lbl {
   font-size: 11px;
@@ -729,8 +752,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.color-blue { color: var(--color-blue); }
-.color-gray { color: var(--text-secondary); }
+.color-blue {
+  color: var(--color-blue);
+}
+.color-gray {
+  color: var(--text-secondary);
+}
 
 .delay-interactive-badge {
   background: var(--bg-status-good);
@@ -743,12 +770,16 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: all 0.2s ease;
 }
-.delay-interactive-badge:active { transform: scale(0.95); }
+.delay-interactive-badge:active {
+  transform: scale(0.95);
+}
 .delay-interactive-badge.state-error {
   background: #fdecea;
   color: #e5484d;
 }
-.delay-interactive-badge.state-error .icon-g { color: #e5484d; }
+.delay-interactive-badge.state-error .icon-g {
+  color: #e5484d;
+}
 
 .time-wrapper {
   display: flex;
@@ -766,9 +797,15 @@ onBeforeUnmount(() => {
   display: inline-block;
   vertical-align: middle;
 }
-.copy-btn .icon-g { color: var(--color-blue); }
-.delay-interactive-badge .icon-g { color: var(--color-green); }
-.time-wrapper .icon-g { color: var(--text-muted); }
+.copy-btn .icon-g {
+  color: var(--color-blue);
+}
+.delay-interactive-badge .icon-g {
+  color: var(--color-green);
+}
+.time-wrapper .icon-g {
+  color: var(--text-muted);
+}
 
 /* 页头操作区 */
 .header-actions {
@@ -831,10 +868,16 @@ onBeforeUnmount(() => {
   margin-right: 4px;
 }
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
-.spinning { animation: spin 1s linear infinite; }
+.spinning {
+  animation: spin 1s linear infinite;
+}
 .all-loaded-hint {
   grid-column: 1 / -1;
   text-align: center;

@@ -364,7 +364,9 @@ button:disabled {
   animation: spin 1s linear infinite;
 }
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 圆形返回按钮 */
@@ -418,7 +420,11 @@ button:disabled {
 
 .fetch-icon {
   font-size: 16px !important;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
 }
 
 /* 设置卡片（参数管理、设置共用） */
@@ -444,7 +450,9 @@ button:disabled {
 .card-icon {
   font-size: 18px !important;
   color: var(--color-blue);
-  font-variation-settings: 'FILL' 0, 'wght' 500;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 500;
 }
 
 .card-title-group h2 {
@@ -493,8 +501,12 @@ button:disabled {
   width: 25%;
 }
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ==========================================================================

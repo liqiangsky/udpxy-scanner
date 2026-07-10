@@ -1,7 +1,12 @@
 <template>
   <div class="sc-toast-container">
     <TransitionGroup name="toast-slide" tag="div" class="sc-toast-group">
-      <div v-for="item in items" :key="item.id" class="sc-toast-item" :class="[`type-${item.type}`, { 'is-notif': item.notification }]">
+      <div
+        v-for="item in items"
+        :key="item.id"
+        class="sc-toast-item"
+        :class="[`type-${item.type}`, { 'is-notif': item.notification }]"
+      >
         <span class="sc-toast-icon material-symbols-outlined">{{ icons[item.type] }}</span>
         <div class="sc-toast-content">{{ item.message }}</div>
         <button class="sc-toast-close" @click="remove(item.id)">
@@ -96,8 +101,9 @@ defineExpose({ add })
   pointer-events: auto;
   box-sizing: border-box;
   /* 动效：用于 TransitionGroup 的 enter/leave */
-  transition: opacity 0.35s cubic-bezier(0.25, 1, 0.5, 1),
-              transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+  transition:
+    opacity 0.35s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* 核心内容区 */
@@ -186,10 +192,18 @@ defineExpose({ add })
   border-radius: inherit;
   pointer-events: none;
 }
-.is-notif.type-success::before { background: rgba(52, 199, 89, 0.06); }
-.is-notif.type-error::before   { background: rgba(255, 59, 48, 0.06); }
-.is-notif.type-info::before    { background: rgba(0, 122, 255, 0.06); }
-.is-notif.type-warning::before { background: rgba(255, 149, 0, 0.06); }
+.is-notif.type-success::before {
+  background: rgba(52, 199, 89, 0.06);
+}
+.is-notif.type-error::before {
+  background: rgba(255, 59, 48, 0.06);
+}
+.is-notif.type-info::before {
+  background: rgba(0, 122, 255, 0.06);
+}
+.is-notif.type-warning::before {
+  background: rgba(255, 149, 0, 0.06);
+}
 
 .is-notif .sc-toast-content {
   font-weight: 600;

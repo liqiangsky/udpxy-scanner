@@ -15,7 +15,7 @@ import sys
 import sqlite3
 
 DATA_DIR = sys.argv[1] if len(sys.argv) > 1 else "/app/data"
-SERVER_DIR = os.path.join(os.path.dirname(__file__), "..")
+SERVER_DIR = os.path.join(os.path.dirname(__file__), "../../server-data")
 
 _TARGET_DB = "data.db"
 # 表名映射（旧表名 → 新表名）

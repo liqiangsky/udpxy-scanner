@@ -22,7 +22,6 @@
       <span class="tab-text">设置</span>
     </router-link>
   </nav>
-
 </template>
 
 <script setup>
@@ -43,16 +42,24 @@ onMounted(() => {
   }
 })
 
-watch(() => authStore.isLoggedIn, (loggedIn) => {
-  if (loggedIn) {
-    msgStore.connectSSE()
-    msgStore.fetchUnreadCount()
-  } else {
-    msgStore.disconnectSSE()
-  }
-})
+watch(
+  () => authStore.isLoggedIn,
+  (loggedIn) => {
+    if (loggedIn) {
+      msgStore.connectSSE()
+      msgStore.fetchUnreadCount()
+    } else {
+      msgStore.disconnectSSE()
+    }
+  },
+)
 
 const showTabbar = computed(() => {
-  return authStore.isLoggedIn && !route.meta?.hideNavbar && route.path !== '/login' && !batchSelectActive.value
+  return (
+    authStore.isLoggedIn &&
+    !route.meta?.hideNavbar &&
+    route.path !== '/login' &&
+    !batchSelectActive.value
+  )
 })
 </script>

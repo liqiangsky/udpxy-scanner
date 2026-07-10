@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import request from '@/api'
 import { toast } from '@/components/Toast'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+import { API_BASE } from '@/shared'
 
 export const useMessagesStore = defineStore('messages', () => {
   const messages = ref([])
@@ -87,7 +87,7 @@ export const useMessagesStore = defineStore('messages', () => {
 
   const markRead = async (msgId) => {
     await request.post(`/messages/${msgId}/read`)
-    const msg = messages.value.find(m => m.id === msgId)
+    const msg = messages.value.find((m) => m.id === msgId)
     if (msg) {
       msg.read = true
       unreadCount.value = Math.max(0, unreadCount.value - 1)
@@ -99,18 +99,22 @@ export const useMessagesStore = defineStore('messages', () => {
     if (msgType) params.msg_type = msgType
     await request.post('/messages/read-all', null, { params })
     if (msgType) {
-      messages.value.forEach(m => { if (m.type === msgType) m.read = true })
+      messages.value.forEach((m) => {
+        if (m.type === msgType) m.read = true
+      })
     } else {
-      messages.value.forEach(m => { m.read = true })
+      messages.value.forEach((m) => {
+        m.read = true
+      })
     }
     await fetchUnreadCount()
   }
 
   const deleteMessage = async (msgId) => {
     await request.delete(`/messages/${msgId}`)
-    messages.value = messages.value.filter(m => m.id !== msgId)
+    messages.value = messages.value.filter((m) => m.id !== msgId)
     total.value = Math.max(0, total.value - 1)
-    const wasUnread = messages.value.find(m => m.id === msgId && !m.read)
+    const wasUnread = messages.value.find((m) => m.id === msgId && !m.read)
     if (wasUnread) {
       unreadCount.value = Math.max(0, unreadCount.value - 1)
     }
@@ -122,7 +126,7 @@ export const useMessagesStore = defineStore('messages', () => {
     if (unreadOnly) params.unread_only = true
     await request.post('/messages/delete-all', null, { params })
     if (msgType) {
-      messages.value = messages.value.filter(m => m.type !== msgType)
+      messages.value = messages.value.filter((m) => m.type !== msgType)
     } else {
       messages.value = []
     }

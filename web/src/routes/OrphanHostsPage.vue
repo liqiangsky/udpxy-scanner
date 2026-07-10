@@ -11,7 +11,12 @@
         </div>
         <div class="header-filters">
           <RegionFilter v-model="filterForm.geoRegion" />
-          <button class="clear-all-btn" :disabled="totalCount === 0 || clearing" @click="handleClearAll" title="全部删除">
+          <button
+            class="clear-all-btn"
+            :disabled="totalCount === 0 || clearing"
+            @click="handleClearAll"
+            title="全部删除"
+          >
             <span v-if="clearing" class="material-symbols-outlined icon-g spinning">sync</span>
             <span v-else class="material-symbols-outlined icon-g">delete_sweep</span>
           </button>
@@ -106,9 +111,7 @@
               <span class="badge-lbl">验证</span>
               <div class="time-wrapper">
                 <span class="material-symbols-outlined icon-g">schedule</span>
-                <span class="badge-txt color-gray font-mono">{{
-                  formatTime(item.updatedAt)
-                }}</span>
+                <span class="badge-txt color-gray font-mono">{{ formatTime(item.updatedAt) }}</span>
               </div>
             </div>
           </div>
@@ -334,7 +337,9 @@ const handleBatchDelete = async () => {
     totalCount.value > loadedCount
       ? `\n\n（当前已加载 ${loadedCount} / 共 ${totalCount.value} 项，本次仅删除已加载项中已选中的部分）`
       : ''
-  const confirmed = confirm(`确定要删除 ${selectedCount} 个游离主机吗？${scopeHint}\n\n此操作不可恢复。`)
+  const confirmed = confirm(
+    `确定要删除 ${selectedCount} 个游离主机吗？${scopeHint}\n\n此操作不可恢复。`,
+  )
   if (!confirmed) return
 
   const ids = [...selection]

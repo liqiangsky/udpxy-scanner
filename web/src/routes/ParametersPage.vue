@@ -84,8 +84,6 @@
           />
           <p class="field-desc">Cron 表达式：分 时 日 月 周。留空不执行。</p>
         </div>
-
-
       </div>
 
       <!-- 推送 API Key -->
@@ -128,7 +126,6 @@
 import { ref, reactive, onMounted } from 'vue'
 import { toast } from '@/components/Toast'
 import { useSettingsStore } from '@/stores/settings'
-import request from '@/api'
 
 const settingsStore = useSettingsStore()
 

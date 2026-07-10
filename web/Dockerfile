@@ -1,18 +1,17 @@
 # ==========================================
-# 前端 Dockerfile — nginx 独立部署
-# 构建: docker build \
-#   --build-arg VITE_API_BASE=/api \
-#   -t udpxy-scanner-frontend -f web/Dockerfile web/
-# 运行: docker run -p 8080:80 udpxy-scanner-frontend
+# 前端 Dockerfile
+# 构建: docker build -t udpxy-scanner-frontend .
+# 运行(后端直连): docker run -d --name udpxy-scanner-frontend -e VITE_BACKEND_URL=http://HOST:PORT（后端服务地址） -p 8080:80 udpxy-scanner-frontend
+# 运行(NGINX反代): docker run -d --name udpxy-scanner-frontend -e NGINX_BACKEND_URL=http://HOST:PORT（后端服务地址） -p 8080:80 udpxy-scanner-frontend
 # ==========================================
 FROM node:20-alpine AS builder
 
-ARG VITE_API_BASE=/api
-ENV VITE_API_BASE=$VITE_API_BASE
-
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm install
+
+# 核心修改：设置国内淘宝镜像源（或使用腾讯云镜像源：https://mirrors.cloud.tencent.com/npm/）
+RUN npm config set registry https://registry.npmmirror.com && npm install
+
 COPY . .
 RUN npm run build
 
@@ -20,10 +19,9 @@ FROM nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/nginx.conf
-
-# Cloudflare Pages 场景无需此 Dockerfile
-# 直接在 Pages 管理面板设置环境变量 VITE_API_BASE
+COPY env.sh /env.sh
+RUN chmod +x /env.sh
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/env.sh"]

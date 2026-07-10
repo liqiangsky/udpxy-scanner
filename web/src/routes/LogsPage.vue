@@ -40,7 +40,9 @@ const initialized = ref(false)
 let pollTimer = null
 
 const parseLogLine = (line) => {
-  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[\w+\]\s+\[([^\]]+)\]\s+(.*)$/)
+  const match = line.match(
+    /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[\w+\]\s+\[([^\]]+)\]\s+(.*)$/,
+  )
   if (match) {
     return { time: match[1], display: `[${match[2]}] ${match[3]}` }
   }
@@ -49,9 +51,7 @@ const parseLogLine = (line) => {
   return { time: '', display: line }
 }
 
-const parsedLogs = computed(() =>
-  logs.value.map((line) => parseLogLine(line)).reverse()
-)
+const parsedLogs = computed(() => logs.value.map((line) => parseLogLine(line)).reverse())
 
 const fetchLogs = async () => {
   try {
@@ -72,7 +72,11 @@ const refreshLogs = async () => {
 }
 
 const getLogLevelClass = (display) => {
-  if (display.includes('[ERROR]') || display.includes('[EXCEPTION]') || display.includes('[CRITICAL]'))
+  if (
+    display.includes('[ERROR]') ||
+    display.includes('[EXCEPTION]') ||
+    display.includes('[CRITICAL]')
+  )
     return 'log-error'
   if (display.includes('[WARNING]')) return 'log-warning'
   return ''

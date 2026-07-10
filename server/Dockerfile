@@ -1,7 +1,7 @@
 # ==========================================
-# 后端 Dockerfile — HF Spaces 部署 / 独立运行
+# 后端 Dockerfile
 # 构建: docker build -t udpxy-scanner-backend .
-# 运行: docker run -p 7860:7860 udpxy-scanner-backend
+# 运行: docker run -d --name udpxy-scanner-backend -p 7860:7860 udpxy-scanner-backend
 # ==========================================
 FROM python:3.11-slim-bookworm
 
@@ -24,7 +24,7 @@ COPY . /app/server/
 # 下载 ip2region 离线数据库（本地已有则覆盖，确保最新）
 RUN mkdir -p /app/server/data && \
     curl -fSL -o /app/server/data/ip2region_v4.xdb \
-    "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb" || \
+    "https://gh-proxy.org/https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb" || \
     echo "⚠️ curl 下载 xdb 失败，使用 COPY 的本地文件（如有）"
 
 ENV PYTHONPATH=/app/server

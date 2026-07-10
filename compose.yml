@@ -7,7 +7,7 @@ services:
     ports:
       - "7860:7860"
     volumes:
-      - ./data:/app/data
+      - ./server-data:/app/data
     environment:
       - PASSWORD=admin
     restart: unless-stopped
@@ -39,7 +39,7 @@ services:
   caddy:
     image: caddy:latest
     profiles: ["caddy"]
-    container_name: udpxy-caddy
+    container_name: udpxy-scanner-caddy
     ports:
       - "80:80"
       - "443:443"
