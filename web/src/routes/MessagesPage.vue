@@ -224,7 +224,7 @@ onMounted(() => {
   gap: 14px;
   width: 100%;
   max-width: var(--max-content);
-  padding-bottom: 80px;
+  padding-bottom: 40px;
 }
 @media (min-width: 768px) {
   .list-wrapper {
