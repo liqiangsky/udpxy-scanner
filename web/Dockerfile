@@ -1,8 +1,8 @@
 # ==========================================
 # 前端 Dockerfile
 # 构建: docker build -t udpxy-scanner-frontend .
-# 运行(后端直连): docker run -d --name udpxy-scanner-frontend -e VITE_BACKEND_URL=http://HOST:PORT（后端服务地址） -p 8080:80 udpxy-scanner-frontend
-# 运行(NGINX反代): docker run -d --name udpxy-scanner-frontend -e NGINX_BACKEND_URL=http://HOST:PORT（后端服务地址） -p 8080:80 udpxy-scanner-frontend
+# 运行(NGINX反代): docker run -d --name udpxy-scanner-frontend -e NGINX_BACKEND_URL=http://HOST:PORT -p 8080:80 udpxy-scanner-frontend
+# 运行(JS直连):   docker run -d --name udpxy-scanner-frontend -e VITE_BACKEND_URL=http://HOST:PORT -p 8080:80 udpxy-scanner-frontend
 # ==========================================
 FROM node:20-alpine AS builder
 
