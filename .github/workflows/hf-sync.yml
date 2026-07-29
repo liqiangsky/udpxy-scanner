@@ -1,6 +1,8 @@
 name: Sync Server to HF Spaces
 on:
   push:
+    branches:
+      - '**'
     paths:
       - 'server/**'
   workflow_dispatch:
