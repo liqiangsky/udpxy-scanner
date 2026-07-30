@@ -236,6 +236,10 @@ async def handle_heartbeat() -> dict:
         sub_id = sub_dict["id"]
         if not cron_match(fetch_cron, cron_now) or not _should_exec(f"sub_{sub_id}", now):
             return None
+        # URL 为空说明是纯推送型订阅，无需拉取
+        if not sub_dict.get("url", ""):
+            logger.info(f"⏭️ [订阅跳过] {sub_dict['name']}(id={sub_id}) 无 URL，跳过拉取（纯推送型订阅）")
+            return (sub_dict, -1)
         # 原子检查并标记拉取状态，防止与手动拉取冲突
         if not task_runner.start_fetch(sub_id):
             logger.info(f"⏭️ [订阅跳过] {sub_dict['name']}(id={sub_id}) 已在拉取中，等待下次触发")

@@ -1,0 +1,40 @@
+name: 360 Quake Push Task
+
+on:
+  # 1. 由订阅调度器每 3 天触发一次（月均 ~10 次，匹配免费额度）
+  repository_dispatch:
+    types: [trigger_quake]
+
+  # 2. 保留手动触发，方便调试
+  workflow_dispatch:
+    inputs:
+      quake_query:
+        description: 'Quake 搜索语法（留空使用默认值）'
+        required: false
+        default: ''
+
+jobs:
+  run_scanner:
+    runs-on: ubuntu-latest
+    environment: "env"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install aiohttp
+
+      - name: Run Quake Scanner
+        env:
+          QUAKE_API_KEY: ${{ secrets.QUAKE_API_KEY }}
+          QUAKE_QUERY: ${{ github.event.client_payload.quake_query || github.event.inputs.quake_query || '' }}
+          PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
+          PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
+        run: |
+          python .github/scripts/quake.py

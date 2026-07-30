@@ -79,7 +79,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             uid TEXT NOT NULL UNIQUE,
-            url TEXT NOT NULL,
+            url TEXT DEFAULT '',
             enabled INTEGER DEFAULT 1,
             fetchCron TEXT DEFAULT '',
             lastFetchAt INTEGER DEFAULT NULL,

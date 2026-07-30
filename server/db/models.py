@@ -25,7 +25,7 @@ class SourceCacheDelete(BaseModel):
 class ApiSubscriptionCreate(BaseModel):
     name: str
     uid: str
-    url: str
+    url: Optional[str] = ""
     enabled: bool = True
     fetchCron: str = ""
 

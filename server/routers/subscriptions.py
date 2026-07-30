@@ -94,6 +94,12 @@ def api_fetch_subscription(sub_id: int):
 
     sub_info = dict(row)
 
+    # URL 为空说明是纯推送型订阅（如 360Quake），无需拉取
+    if not sub_info.get("url", ""):
+        logger.info(f"⏭️ 订阅 {sub_info['name']} 无 URL，跳过拉取（纯推送型订阅）")
+        task_runner.finish_fetch(sub_id)
+        return {"ok": True, "msg": f"跳过拉取：{sub_info['name']}（纯推送型订阅）"}
+
     def run_fetch():
         try:
             async def _do():
@@ -170,6 +176,11 @@ def api_fetch_all_subscriptions():
 
 async def _fetch_single(row: dict) -> int:
     """拉取单个订阅，返回成功数量"""
+    # URL 为空说明是纯推送型订阅，跳过拉取
+    if not row.get("url", ""):
+        logger.info(f"⏭️ 订阅 {row['name']} 无 URL，跳过拉取（纯推送型订阅）")
+        return 0
+
     logger.info(f"📡 开始拉取订阅 {row['name']}")
     try:
         sources = await fetch_subscription(row["name"], row["uid"], row["url"])

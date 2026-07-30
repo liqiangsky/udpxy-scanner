@@ -8,6 +8,11 @@ logger = logging.getLogger("订阅拉取")
 
 
 async def fetch_subscription(name: str, uid: str, url: str) -> List[dict]:
+    # URL 为空时直接返回，避免对空 URL 发起无意义请求
+    if not url:
+        logger.info(f"⏭️ [订阅:{name}] URL 为空，跳过拉取")
+        return []
+
     parsed = urlparse(url)
     qs = parse_qs(parsed.query, keep_blank_values=True)
     qs["sourceType"] = [uid]
