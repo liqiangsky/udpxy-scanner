@@ -7,11 +7,6 @@ on:
 
   # 2. 保留手动触发，方便调试
   workflow_dispatch:
-    inputs:
-      quake_query:
-        description: 'Quake 搜索语法（留空使用默认值）'
-        required: false
-        default: ''
 
 jobs:
   run_scanner:
@@ -33,7 +28,6 @@ jobs:
       - name: Run Quake Scanner
         env:
           QUAKE_API_KEY: ${{ secrets.QUAKE_API_KEY }}
-          QUAKE_QUERY: ${{ github.event.client_payload.quake_query || github.event.inputs.quake_query || '' }}
           PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
           PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
         run: |

@@ -28,7 +28,7 @@ logger = logging.getLogger("quake_scanner")
 # 2. 环境变量配置
 # ──────────────────────────────────────────────
 QUAKE_API_KEY = os.getenv("QUAKE_API_KEY", "").strip()
-QUERY = os.getenv("QUAKE_QUERY", '(app:"udpxy multicast UDP-to-HTTP") AND country_cn: "中国"').strip()
+QUERY = '(app:"udpxy multicast UDP-to-HTTP") AND country_cn: "中国"'
 PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "").strip()
 PUSH_API_KEY = os.getenv("PUSH_API_KEY", "").strip()
 
