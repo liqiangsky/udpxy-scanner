@@ -309,6 +309,10 @@ async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
 
         batch_num = i // BATCH_SIZE + 1
 
+        # 打印每批推送的完整数据结构
+        logger.info(f"📦 推送批次 {batch_num}/{total_batches} 数据结构:")
+        logger.info(json.dumps(payload, ensure_ascii=False, indent=2))
+
         try:
             async with session.post(
                 PUSH_CALLBACK_URL,
@@ -377,6 +381,12 @@ async def main():
             sys.exit(1)
 
         # ── 7.4 解析数据 ──
+        # 打印完整 API 响应
+        logger.info("=" * 50)
+        logger.info("📦 360 Quake API 完整响应:")
+        logger.info(json.dumps(resp, ensure_ascii=False, indent=2))
+        logger.info("=" * 50)
+
         hosts, filtered_count = parse_hosts(resp)
         total_in_response = len(resp.get("data", []))
         logger.info(f"📊 API 返回 {total_in_response} 条，过滤内网 {filtered_count} 条，有效 host {len(hosts)} 个")
