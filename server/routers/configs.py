@@ -290,6 +290,16 @@ async def api_source_push(request: Request):
     source_type = body.get("sourceType", "unknown")
     hosts = body.get("hosts", [])
 
+    # 校验 sourceType 必须是已启用的订阅 UID，防止非法数据入库
+    if source_type != "unknown":
+        with get_db() as conn:
+            sub = conn.execute(
+                "SELECT id FROM subscription WHERE uid=? AND enabled=1",
+                (source_type,)
+            ).fetchone()
+        if not sub:
+            raise HTTPException(400, f"sourceType '{source_type}' 不存在或未启用，请先在订阅管理中创建对应订阅")
+
     logger.info(f"📥 收到 {len(hosts)} 个资产 ({source_type})")
 
     task = asyncio.create_task(process_source_data(source_type, hosts))
