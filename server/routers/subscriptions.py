@@ -4,7 +4,7 @@ import threading
 import asyncio
 import time
 from fastapi import APIRouter, HTTPException
-from db.database import get_db
+from db.database import get_db, db_write_lock
 from db.models import ApiSubscriptionCreate
 from core.status import task_runner
 from services.source_cache import process_source_data
@@ -28,35 +28,35 @@ def api_list_subscriptions():
 @router.post("/subscriptions")
 def api_create_subscription(data: ApiSubscriptionCreate):
     """创建 API 订阅"""
-    with get_db() as conn:
-        try:
-            conn.execute(
-                "INSERT INTO subscription (name, uid, url, enabled, fetchCron) VALUES (?, ?, ?, ?, ?)",
-                (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron)
-            )
-            sub_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        except Exception as e:
-            raise HTTPException(400, f"创建失败: {e}")
+    with db_write_lock:
+        with get_db() as conn:
+            try:
+                conn.execute(
+                    "INSERT INTO subscription (name, uid, url, enabled, fetchCron) VALUES (?, ?, ?, ?, ?)",
+                    (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron)
+                )
+                sub_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            except Exception as e:
+                raise HTTPException(400, f"创建失败: {e}")
     return {"ok": True, "id": sub_id}
 
 
 @router.put("/subscriptions/{sub_id}")
 def api_update_subscription(sub_id: int, data: ApiSubscriptionCreate):
     """更新 API 订阅"""
-    with get_db() as conn:
-        row = conn.execute("SELECT id FROM subscription WHERE id=?", (sub_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "订阅不存在")
-        old = conn.execute("SELECT uid FROM subscription WHERE id=?", (sub_id,)).fetchone()
-        old_uid = old["uid"]
-        conn.execute(
-            "UPDATE subscription SET name=?, uid=?, url=?, enabled=?, fetchCron=?, updatedAt=? WHERE id=?",
-            (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron, int(time.time()), sub_id)
-        )
-        # uid 变更时同步更新 cache 中的 sourceType
-        if old_uid != data.uid:
-            with get_db() as cconn:
-                cconn.execute(
+    with db_write_lock:
+        with get_db() as conn:
+            row = conn.execute("SELECT id FROM subscription WHERE id=?", (sub_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "订阅不存在")
+            old = conn.execute("SELECT uid FROM subscription WHERE id=?", (sub_id,)).fetchone()
+            old_uid = old["uid"]
+            conn.execute(
+                "UPDATE subscription SET name=?, uid=?, url=?, enabled=?, fetchCron=?, updatedAt=? WHERE id=?",
+                (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron, int(time.time()), sub_id)
+            )
+            if old_uid != data.uid:
+                conn.execute(
                     "UPDATE cache SET sourceType=? WHERE sourceType=?",
                     (data.uid, old_uid)
                 )
@@ -66,14 +66,14 @@ def api_update_subscription(sub_id: int, data: ApiSubscriptionCreate):
 @router.delete("/subscriptions/{sub_id}")
 def api_delete_subscription(sub_id: int):
     """删除 API 订阅并清除对应的 cache"""
-    with get_db() as conn:
-        row = conn.execute("SELECT uid FROM subscription WHERE id=?", (sub_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "订阅不存在")
-        uid = row["uid"]
-        conn.execute("DELETE FROM subscription WHERE id=?", (sub_id,))
-    with get_db() as conn:
-        conn.execute("DELETE FROM cache WHERE sourceType=?", (uid,))
+    with db_write_lock:
+        with get_db() as conn:
+            row = conn.execute("SELECT uid FROM subscription WHERE id=?", (sub_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "订阅不存在")
+            uid = row["uid"]
+            conn.execute("DELETE FROM subscription WHERE id=?", (sub_id,))
+            conn.execute("DELETE FROM cache WHERE sourceType=?", (uid,))
     logger.info(f"🗑️ [订阅删除] uid={uid}")
     return {"ok": True}
 
@@ -108,11 +108,12 @@ def api_fetch_subscription(sub_id: int):
                 if sources:
                     hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
                     await process_source_data(sub_info["uid"], hosts_data)
-                with get_db() as conn:
-                    conn.execute(
-                        "UPDATE subscription SET lastFetchAt=? WHERE id=?",
-                        (int(time.time()), sub_info["id"])
-                    )
+                with db_write_lock:
+                    with get_db() as conn:
+                        conn.execute(
+                            "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                            (int(time.time()), sub_info["id"])
+                        )
                 logger.info(f"✅ 订阅 {sub_info['name']} 拉取完成")
                 if sources:
                     create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_info['name']}", f"获取到 {len(sources)} 条数据", "订阅管理")
@@ -154,12 +155,13 @@ def api_fetch_all_subscriptions():
                 ), return_exceptions=True)
 
                 now = int(time.time())
-                with get_db() as conn:
-                    for row in rows:
-                        conn.execute(
-                            "UPDATE subscription SET lastFetchAt=? WHERE id=?",
-                            (now, row["id"])
-                        )
+                with db_write_lock:
+                    with get_db() as conn:
+                        for row in rows:
+                            conn.execute(
+                                "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                                (now, row["id"])
+                            )
                 success = sum(1 for r in results if isinstance(r, int))
                 logger.info(f"✅ 全部拉取完成: {success}/{len(rows)} 个成功")
                 if success > 0:

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from db.database import get_db, get_setting, _settings_cache, _settings_cache_lock
+from db.database import get_db, get_setting, _settings_cache, _settings_cache_lock, db_write_lock
 from db.models import GlobalSettingsUpdate
 from services.log_buffer import get_recent_logs
 
@@ -24,13 +24,14 @@ def api_get_settings():
 
 @router.put("/settings")
 def api_update_settings(data: GlobalSettingsUpdate):
-    with get_db() as conn:
-        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('concurrency', ?)", (str(data.concurrency),))
-        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('timeout', ?)", (str(data.timeout),))
-        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('config_delay', ?)", (str(data.configDelay),))
-        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('janitor_cron', ?)", (data.janitorCron,))
-        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('scan_cron', ?)", (data.scanCron,))
-        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('push_api_key', ?)", (data.pushApiKey,))
+    with db_write_lock:
+        with get_db() as conn:
+            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('concurrency', ?)", (str(data.concurrency),))
+            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('timeout', ?)", (str(data.timeout),))
+            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('config_delay', ?)", (str(data.configDelay),))
+            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('janitor_cron', ?)", (data.janitorCron,))
+            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('scan_cron', ?)", (data.scanCron,))
+            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('push_api_key', ?)", (data.pushApiKey,))
     with _settings_cache_lock:
         _settings_cache.clear()
     return {"ok": True}
