@@ -5,7 +5,7 @@ import time
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from db.database import get_db, get_setting
+from db.database import get_db, get_setting, db_write_lock
 
 router = APIRouter()
 
@@ -122,8 +122,9 @@ def api_change_password(request: Request, req: ChangePasswordRequest):
     if len(req.newPassword) < 4:
         raise HTTPException(400, "新密码至少 4 位")
     new_hash = "pbkdf2$" + hash_password(req.newPassword)
-    with get_db() as conn:
-        conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('password_hash', ?)", (new_hash,))
+    with db_write_lock:
+        with get_db() as conn:
+            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('password_hash', ?)", (new_hash,))
     # 清除密码设置缓存，确保下次登录读到新密码
     from db.database import _settings_cache
     _settings_cache.pop("password_hash", None)

@@ -94,11 +94,12 @@ def cache_host_geo_batch(rows: list):
         return
     now = int(time.time())
     batch_rows = [r + (1, now, now) for r in rows]
-    with get_db() as conn:
-        conn.executemany(
-            "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            batch_rows
-        )
+    with db_write_lock:
+        with get_db() as conn:
+            conn.executemany(
+                "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                batch_rows
+            )
 
 
 async def process_source_data(source_type: str, hosts: List[dict]) -> int:

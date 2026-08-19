@@ -22,8 +22,9 @@ def _fetch_config(cfg_id: int):
 
 
 def _update_config_timestamp(cfg_id: int):
-    with get_db() as conn:
-        conn.execute("UPDATE config SET updatedAt=? WHERE id=?", (int(time.time()), cfg_id))
+    with db_write_lock:
+        with get_db() as conn:
+            conn.execute("UPDATE config SET updatedAt=? WHERE id=?", (int(time.time()), cfg_id))
 
 
 def _fetch_enabled_subscription():
@@ -34,6 +35,7 @@ def _fetch_enabled_subscription():
 def _batch_insert_hosts(batch_rows: list):
     if not batch_rows:
         return
+    hosts = list(set(row[0] for row in batch_rows))
     with db_write_lock:
         with get_db() as conn:
             conn.executemany("""
@@ -55,11 +57,7 @@ def _batch_insert_hosts(batch_rows: list):
                     geoRegion = ?,
                     geoOperator = ?
             """, batch_rows)
-
-        # 将已入库的 host 标记为 active=1
-        hosts = list(set(row[0] for row in batch_rows))
-        if hosts:
-            with get_db() as conn:
+            if hosts:
                 placeholders = ",".join("?" for _ in hosts)
                 conn.execute(
                     f"UPDATE cache SET active = 1 WHERE host IN ({placeholders})",

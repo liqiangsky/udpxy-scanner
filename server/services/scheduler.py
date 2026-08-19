@@ -170,7 +170,6 @@ async def execute_recheck() -> int:
                                 "DELETE FROM host WHERE id=?",
                                 second_failed_ids
                             )
-                        with get_db() as conn:
                             conn.executemany(
                                 "DELETE FROM cache WHERE host=?",
                                 [(h,) for h in second_failed_hosts]
@@ -264,11 +263,12 @@ async def handle_heartbeat() -> dict:
         sub_dict, source_count = result
         if source_count == -1:
             continue  # 跳过
-        with get_db() as conn:
-            conn.execute(
-                "UPDATE subscription SET lastFetchAt=? WHERE id=?",
-                (int(time.time()), sub_dict["id"])
-            )
+        with db_write_lock:
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE subscription SET lastFetchAt=? WHERE id=?",
+                    (int(time.time()), sub_dict["id"])
+                )
         triggered.append({"task": f"sub_{sub_dict['id']}", "name": sub_dict["name"], "fetched": source_count})
 
     return triggered

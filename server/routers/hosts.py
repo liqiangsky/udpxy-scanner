@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Optional
 
-from db.database import get_db, get_setting, run_in_thread
+from db.database import get_db, get_setting, run_in_thread, db_write_lock
 
 logger = logging.getLogger("主机")
 router = APIRouter()
@@ -16,8 +16,9 @@ def _fetch_host_source(source_id: int):
 
 
 def _update_host_delay(delay: int, now: int, source_id: int):
-    with get_db() as conn:
-        conn.execute("UPDATE host SET delay=?, updatedAt=? WHERE id=?", (delay, now, source_id))
+    with db_write_lock:
+        with get_db() as conn:
+            conn.execute("UPDATE host SET delay=?, updatedAt=? WHERE id=?", (delay, now, source_id))
 
 
 @router.get("/hosts")
@@ -153,19 +154,17 @@ def api_delete_host_source(source_id: int):
 
 def _do_delete_host(source_id: int) -> tuple[bool, str]:
     """执行删除，返回 (成功?, 错误信息)"""
-    with get_db() as conn:
-        row = conn.execute("SELECT host FROM host WHERE id=?", (source_id,)).fetchone()
-        if not row:
-            return False, "主机不存在"
-        host = row["host"]
-        conn.execute("DELETE FROM host WHERE id=?", (source_id,))
-        remaining = conn.execute("SELECT COUNT(*) AS cnt FROM host WHERE host=?", (host,)).fetchone()["cnt"]
-
-    if remaining == 0:
+    with db_write_lock:
         with get_db() as conn:
-            conn.execute("DELETE FROM cache WHERE host=?", (host,))
-            logger.info(f"🗑️ [同步清理] host={host} 已从 cache 中删除")
-
+            row = conn.execute("SELECT host FROM host WHERE id=?", (source_id,)).fetchone()
+            if not row:
+                return False, "主机不存在"
+            host = row["host"]
+            conn.execute("DELETE FROM host WHERE id=?", (source_id,))
+            remaining = conn.execute("SELECT COUNT(*) AS cnt FROM host WHERE host=?", (host,)).fetchone()["cnt"]
+            if remaining == 0:
+                conn.execute("DELETE FROM cache WHERE host=?", (host,))
+                logger.info(f"🗑️ [同步清理] host={host} 已从 cache 中删除")
     logger.info(f"🗑️ [删除主机] id={source_id}, host={host}, 剩余条目={remaining}")
     return True, ""
 

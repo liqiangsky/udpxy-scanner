@@ -5,7 +5,7 @@ import logging
 import time
 import math
 from typing import Optional
-from db.database import get_db
+from db.database import get_db, db_write_lock
 
 logger = logging.getLogger("消息中心")
 
@@ -19,12 +19,13 @@ MSG_TYPE_ERROR = "error"
 def create_message(msg_type: str, title: str, content: str = "", source: str = ""):
     """创建一条消息并推送到 SSE"""
     now = int(time.time())
-    with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO notification (type, title, content, source, read, createdAt) VALUES (?, ?, ?, ?, 0, ?)",
-            (msg_type, title, content, source, now)
-        )
-        msg_id = cur.lastrowid
+    with db_write_lock:
+        with get_db() as conn:
+            cur = conn.execute(
+                "INSERT INTO notification (type, title, content, source, read, createdAt) VALUES (?, ?, ?, ?, 0, ?)",
+                (msg_type, title, content, source, now)
+            )
+            msg_id = cur.lastrowid
     logger.info(f"📬 [消息] [{msg_type}] {title}")
     # 异步推送到 SSE
     from services.event_bus import event_bus
@@ -109,32 +110,35 @@ def get_unread_count() -> int:
 
 def mark_read(message_id: int = None, all: bool = False, msg_type: str = None):
     """标记消息已读，支持按消息类型筛选"""
-    with get_db() as conn:
-        if all:
-            if msg_type:
-                conn.execute("UPDATE notification SET read=1 WHERE read=0 AND type=?", (msg_type,))
-            else:
-                conn.execute("UPDATE notification SET read=1 WHERE read=0")
-        elif message_id:
-            conn.execute("UPDATE notification SET read=1 WHERE id=?", (message_id,))
+    with db_write_lock:
+        with get_db() as conn:
+            if all:
+                if msg_type:
+                    conn.execute("UPDATE notification SET read=1 WHERE read=0 AND type=?", (msg_type,))
+                else:
+                    conn.execute("UPDATE notification SET read=1 WHERE read=0")
+            elif message_id:
+                conn.execute("UPDATE notification SET read=1 WHERE id=?", (message_id,))
 
 
 def delete_message(message_id: int):
-    with get_db() as conn:
-        conn.execute("DELETE FROM notification WHERE id=?", (message_id,))
+    with db_write_lock:
+        with get_db() as conn:
+            conn.execute("DELETE FROM notification WHERE id=?", (message_id,))
 
 
 def delete_all_messages(msg_type: str = None, unread_only: bool = False):
     """批量删除消息，支持按消息类型和未读筛选"""
-    with get_db() as conn:
-        where = []
-        params = []
-        if unread_only:
-            where.append("read = 0")
-        if msg_type:
-            where.append("type = ?")
-            params.append(msg_type)
-        if where:
-            conn.execute(f"DELETE FROM notification WHERE {' AND '.join(where)}", params)
-        else:
-            conn.execute("DELETE FROM notification")
+    with db_write_lock:
+        with get_db() as conn:
+            where = []
+            params = []
+            if unread_only:
+                where.append("read = 0")
+            if msg_type:
+                where.append("type = ?")
+                params.append(msg_type)
+            if where:
+                conn.execute(f"DELETE FROM notification WHERE {' AND '.join(where)}", params)
+            else:
+                conn.execute("DELETE FROM notification")

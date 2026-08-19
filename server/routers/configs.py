@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 from fastapi import APIRouter, HTTPException, Request
 from typing import Optional
-from db.database import get_db, get_setting
+from db.database import get_db, get_setting, db_write_lock, run_in_thread
 from db.models import ConfigCreateOrUpdate, SourceCacheDelete
 from core.status import task_runner
 from core.engine import trigger_background_queue, enqueue_background_queue
@@ -49,38 +49,41 @@ def api_list_configs():
 @router.post("/configs")
 def api_create_config(data: ConfigCreateOrUpdate):
     _check_data_source_enabled(data.dataSource)
-    with get_db() as conn:
-        cur = conn.execute("""
-            INSERT INTO config (name, dataSource,
+    with db_write_lock:
+        with get_db() as conn:
+            cur = conn.execute("""
+                INSERT INTO config (name, dataSource,
                                      templateRegion, templateOperator, templateTargetName, templateTargetAddress,
                                      enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            data.name, data.dataSource,
-            data.region, data.operator, data.targetName, data.targetAddress,
-            1 if data.enabled else 0
-        ))
-        result = dict(conn.execute("SELECT * FROM config WHERE id=?", (cur.lastrowid,)).fetchone())
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data.name, data.dataSource,
+                data.region, data.operator, data.targetName, data.targetAddress,
+                1 if data.enabled else 0
+            ))
+            result = dict(conn.execute("SELECT * FROM config WHERE id=?", (cur.lastrowid,)).fetchone())
     return result
 
 @router.put("/configs/{config_id}")
 def api_update_config(config_id: int, data: ConfigCreateOrUpdate):
     _check_data_source_enabled(data.dataSource)
-    with get_db() as conn:
-        conn.execute("""
-            UPDATE config SET name=?, dataSource=?,
+    with db_write_lock:
+        with get_db() as conn:
+            conn.execute("""
+                UPDATE config SET name=?, dataSource=?,
                                    templateRegion=?, templateOperator=?, templateTargetName=?, templateTargetAddress=?,
                                    enabled=?, updatedAt=? WHERE id=?
-        """, (
-            data.name, data.dataSource,
-            data.region, data.operator, data.targetName, data.targetAddress,
-            1 if data.enabled else 0, int(time.time()), config_id
-        ))
+            """, (
+                data.name, data.dataSource,
+                data.region, data.operator, data.targetName, data.targetAddress,
+                1 if data.enabled else 0, int(time.time()), config_id
+            ))
     return {"ok": True}
 
 @router.delete("/configs/{config_id}")
 def api_delete_config(config_id: int):
-    with get_db() as conn: conn.execute("DELETE FROM config WHERE id=?", (config_id,))
+    with db_write_lock:
+        with get_db() as conn: conn.execute("DELETE FROM config WHERE id=?", (config_id,))
     return {"ok": True}
 
 @router.post("/configs/{config_id}/run")
@@ -195,15 +198,28 @@ def api_cache_orphans(geo_region: Optional[str] = None, page: int = 1, page_size
     }
 
 
+def _update_cache_status(cache_id: int, new_status: int, now: int):
+    with db_write_lock:
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE cache SET status=?, updatedAt=? WHERE id=?",
+                (new_status, now, cache_id)
+            )
+
+
+def _get_cache_host(cache_id: int):
+    with get_db() as conn:
+        row = conn.execute("SELECT host FROM cache WHERE id=?", (cache_id,)).fetchone()
+    return row["host"] if row else None
+
+
 @router.post("/source-cache/{cache_id}/check-online")
 async def api_cache_check_online(cache_id: int):
     """检测游离主机是否在线（udpxy health check）"""
-    with get_db() as conn:
-        row = conn.execute("SELECT host FROM cache WHERE id=?", (cache_id,)).fetchone()
-    if not row:
+    host_val = await run_in_thread(_get_cache_host, cache_id)
+    if not host_val:
         raise HTTPException(404, "主机不存在")
 
-    host_val = row["host"]
     if not host_val.startswith("http"):
         host_val = f"http://{host_val}"
     status_url = f"{host_val.rstrip('/')}/status"
@@ -224,11 +240,7 @@ async def api_cache_check_online(cache_id: int):
     except Exception as e:
         logger.warning(f"⚠️ [在线检测失败] id={cache_id} -> {e}")
     now = int(time.time())
-    with get_db() as conn:
-        conn.execute(
-            "UPDATE cache SET status=?, updatedAt=? WHERE id=?",
-            (new_status, now, cache_id)
-        )
+    await run_in_thread(_update_cache_status, cache_id, new_status, now)
 
     return {"ok": True, "online": new_status == 1, "updatedAt": now, "status": new_status}
 
@@ -248,21 +260,23 @@ def api_cache_delete(data: SourceCacheDelete):
     if not ids and not source_types:
         raise HTTPException(400, "请提供 ids 或 sourceTypes 参数")
 
-    with get_db() as conn:
-        if ids:
-            placeholders = ",".join("?" for _ in ids)
-            conn.execute(f"DELETE FROM cache WHERE id IN ({placeholders})", ids)
-        if source_types:
-            placeholders = ",".join("?" for _ in source_types)
-            conn.execute(f"DELETE FROM cache WHERE sourceType IN ({placeholders})", source_types)
+    with db_write_lock:
+        with get_db() as conn:
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                conn.execute(f"DELETE FROM cache WHERE id IN ({placeholders})", ids)
+            if source_types:
+                placeholders = ",".join("?" for _ in source_types)
+                conn.execute(f"DELETE FROM cache WHERE sourceType IN ({placeholders})", source_types)
     return {"ok": True}
 
 
 @router.post("/source-cache/clear-orphans")
 def api_cache_clear_orphans():
     """清空所有游离主机（active=0）"""
-    with get_db() as conn:
-        deleted = conn.execute("DELETE FROM cache WHERE active=0").rowcount
+    with db_write_lock:
+        with get_db() as conn:
+            deleted = conn.execute("DELETE FROM cache WHERE active=0").rowcount
     logger.info(f"🗑️ [清空游离] 删除了 {deleted} 条")
     return {"ok": True, "deleted": deleted}
 
