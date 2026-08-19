@@ -305,14 +305,16 @@ async def api_source_push(request: Request):
     hosts = body.get("hosts", [])
 
     # 校验 sourceType 必须是已启用的订阅 UID，防止非法数据入库
+    source_name = source_type
     if source_type != "unknown":
         with get_db() as conn:
             sub = conn.execute(
-                "SELECT id FROM subscription WHERE uid=? AND enabled=1",
+                "SELECT id, name FROM subscription WHERE uid=? AND enabled=1",
                 (source_type,)
             ).fetchone()
         if not sub:
             raise HTTPException(400, f"sourceType '{source_type}' 不存在或未启用，请先在订阅管理中创建对应订阅")
+        source_name = sub["name"]
 
     logger.info(f"📥 收到 {len(hosts)} 个资产 ({source_type})")
 
@@ -320,11 +322,11 @@ async def api_source_push(request: Request):
         try:
             count = await process_source_data(source_type, hosts)
             from services.message_service import create_message, MSG_TYPE_SUCCESS
-            create_message(MSG_TYPE_SUCCESS, f"数据推送完成：{source_type}", f"接收到 {len(hosts)} 条，入库 {count} 条", "外部推送")
+            create_message(MSG_TYPE_SUCCESS, f"数据推送完成：{source_name}", f"获取到 {count} 条数据", "订阅管理")
         except Exception as e:
             from services.message_service import create_message, MSG_TYPE_ERROR
             logger.error(f"❌ 处理推送数据失败: {e}")
-            create_message(MSG_TYPE_ERROR, f"数据推送失败：{source_type}", f"错误: {str(e)}", "外部推送")
+            create_message(MSG_TYPE_ERROR, f"数据推送失败：{source_name}", f"错误: {str(e)}", "订阅管理")
 
     asyncio.create_task(_process_and_notify())
 
