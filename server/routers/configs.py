@@ -316,8 +316,17 @@ async def api_source_push(request: Request):
 
     logger.info(f"📥 收到 {len(hosts)} 个资产 ({source_type})")
 
-    task = asyncio.create_task(process_source_data(source_type, hosts))
-    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+    async def _process_and_notify():
+        try:
+            count = await process_source_data(source_type, hosts)
+            from services.message_service import create_message, MSG_TYPE_SUCCESS
+            create_message(MSG_TYPE_SUCCESS, f"数据推送完成：{source_type}", f"接收到 {len(hosts)} 条，入库 {count} 条", "外部推送")
+        except Exception as e:
+            from services.message_service import create_message, MSG_TYPE_ERROR
+            logger.error(f"❌ 处理推送数据失败: {e}")
+            create_message(MSG_TYPE_ERROR, f"数据推送失败：{source_type}", f"错误: {str(e)}", "外部推送")
+
+    asyncio.create_task(_process_and_notify())
 
     return {
         "ok": True,
