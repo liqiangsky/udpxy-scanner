@@ -2,7 +2,12 @@ import sqlite3
 import os
 import time
 import threading
+import logging
+import shutil
 from contextlib import contextmanager
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # 全局 SQLite 写锁：序列化所有并发写入，防止 database is locked
 db_write_lock = threading.Lock()
@@ -44,6 +49,15 @@ def _get_persistent_conn(db_path: str) -> sqlite3.Connection:
 
 def init_db():
     """初始化数据库（全部表都在 data.db 中）"""
+    # 启动后台维护线程
+    start_maintenance_thread()
+
+    # 启动时检查数据库完整性
+    if os.path.exists(DB_PATH) and not check_integrity():
+        logger.warning("启动时数据库完整性检查失败，尝试备份后重建...")
+        _backup_and_recover()
+        return  # 重建后直接返回，避免重复创建
+
     os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -191,6 +205,68 @@ def get_db():
     except Exception:
         conn.rollback()
         raise
+
+
+def check_integrity() -> bool:
+    """检查数据库完整性，返回 True 表示正常"""
+    try:
+        conn = _get_persistent_conn(DB_PATH)
+        result = conn.execute("PRAGMA integrity_check").fetchone()
+        if result[0] == "ok":
+            logger.debug("数据库完整性检查通过")
+            return True
+        else:
+            logger.error(f"数据库完整性检查失败: {result[0]}")
+            return False
+    except Exception as e:
+        logger.error(f"数据库完整性检查异常: {e}")
+        return False
+
+
+def periodic_maintenance():
+    """定期维护任务（仅做完整性检查，不做 VACUUM）"""
+    while True:
+        time.sleep(3600)  # 每小时
+        try:
+            check_integrity()
+        except Exception as e:
+            logger.error(f"定期维护失败: {e}")
+
+
+def start_maintenance_thread():
+    """启动后台维护线程（守护线程，随主进程退出）"""
+    t = threading.Thread(target=periodic_maintenance, daemon=True)
+    t.start()
+    logger.info("数据库维护线程已启动")
+
+
+def _backup_and_recover():
+    """备份损坏的数据库并尝试恢复"""
+    try:
+        db_dir = os.path.dirname(DB_PATH) or "."
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(db_dir, f"udpxy_backup_{timestamp}.db")
+
+        # 创建备份（即使损坏也保留现场）
+        if os.path.exists(DB_PATH):
+            shutil.copy2(DB_PATH, backup_path)
+            logger.info(f"已创建数据库备份: {backup_path}")
+
+        # 删除损坏的文件，重新初始化
+        if os.path.exists(DB_PATH):
+            os.remove(DB_PATH)
+            # 同时删除 WAL 文件（如果有）
+            wal_path = DB_PATH + "-wal"
+            shm_path = DB_PATH + "-shm"
+            for p in [wal_path, shm_path]:
+                if os.path.exists(p):
+                    os.remove(p)
+
+        # 重建表结构（数据丢失，需用户重新导入）
+        init_db()
+        logger.warning("数据库已重建，原有数据已丢失。请检查备份文件恢复。")
+    except Exception as e:
+        logger.error(f"数据库恢复失败: {e}", exc_info=True)
 
 
 def get_setting(key: str, default: str) -> str:
