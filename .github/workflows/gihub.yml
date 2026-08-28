@@ -27,6 +27,9 @@ jobs:
         run: |
           pip install aiohttp
 
+      - name: Ensure data directory exists
+        run: mkdir -p .github/data
+
       - name: Run GitHub Scanner
         env:
           MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
@@ -36,9 +39,15 @@ jobs:
           python .github/scripts/github.py
 
       - name: Commit and push results
+        env:
+          OUTPUT_FILE: .github/data/github.txt
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add .github/data/github.txt
-          git diff --cached --quiet || git commit -m "chore(data): update github results [skip ci]"
-          git push
+          git add "$OUTPUT_FILE"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(data): update github results [skip ci]"
+            git push
+          else
+            echo "No changes to commit"
+          fi

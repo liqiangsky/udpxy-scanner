@@ -28,6 +28,9 @@ jobs:
           pip install playwright aiohttp
           playwright install chromium
 
+      - name: Ensure data directory exists
+        run: mkdir -p .github/data
+
       - name: Run FOFA Scraper
         env:
           FOFA_QBASE64: ${{ secrets.FOFA_QBASE64 }}
@@ -36,9 +39,15 @@ jobs:
           python .github/scripts/fofa.py
 
       - name: Commit and push results
+        env:
+          OUTPUT_FILE: .github/data/fofa.txt
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add .github/data/fofa.txt
-          git diff --cached --quiet || git commit -m "chore(data): update fofa results [skip ci]"
-          git push
+          git add "$OUTPUT_FILE"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(data): update fofa results [skip ci]"
+            git push
+          else
+            echo "No changes to commit"
+          fi

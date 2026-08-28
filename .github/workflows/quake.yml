@@ -27,6 +27,9 @@ jobs:
         run: |
           pip install aiohttp
 
+      - name: Ensure data directory exists
+        run: mkdir -p .github/data
+
       - name: Run Quake Scanner
         env:
           QUAKE_API_KEY: ${{ secrets.QUAKE_API_KEY }}
@@ -35,9 +38,15 @@ jobs:
           python .github/scripts/quake.py
 
       - name: Commit and push results
+        env:
+          OUTPUT_FILE: .github/data/quake.txt
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add .github/data/quake.txt
-          git diff --cached --quiet || git commit -m "chore(data): update quake results [skip ci]"
-          git push
+          git add "$OUTPUT_FILE"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(data): update quake results [skip ci]"
+            git push
+          else
+            echo "No changes to commit"
+          fi
