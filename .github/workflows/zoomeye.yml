@@ -3,7 +3,7 @@ name: ZoomEye Scanner
 on:
   # 1. 每小时执行一次
   schedule:
-    - cron: '0 * * * *'
+    - cron: '18 * * * *'
 
   # 2. 允许手动触发
   workflow_dispatch:
