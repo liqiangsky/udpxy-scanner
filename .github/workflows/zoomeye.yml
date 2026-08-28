@@ -1,15 +1,11 @@
-name: ZoomEye Push Task
+name: ZoomEye Scanner
 
 on:
-  # 1. 允许通过我们上面的 Worker 远程触发
-  repository_dispatch:
-    types: [trigger_zoomeye]
+  # 1. 每小时执行一次
+  schedule:
+    - cron: '0 * * * *'
 
-  # 2. 同时也保留定时触发（比如每2小时，可选）
-#  schedule:
-#    - cron: '0 */2 * * *'
-
-  # 3. 保留手动点击触发
+  # 2. 允许手动触发
   workflow_dispatch:
 
 jobs:
@@ -19,20 +15,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'  #  已修正为 python-version
+          python-version: '3.10'
 
       - name: Install deps
         run: |
           pip install playwright aiohttp
           playwright install chromium
 
-      - name: Run Python Script
+      - name: Run ZoomEye Scanner
         env:
-          PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
-          PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
+          OUTPUT_FILE: .github/data/zoomeye.txt
         run: |
           python .github/scripts/zoomeye.py
+
+      - name: Commit and push results
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .github/data/zoomeye.txt
+          git diff --cached --quiet || git commit -m "chore(data): update zoomeye results [skip ci]"
+          git push

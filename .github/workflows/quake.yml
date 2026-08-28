@@ -1,11 +1,11 @@
-name: 360 Quake Push Task
+name: Quake Scanner
 
 on:
-  # 1. 由订阅调度器每 3 天触发一次（月均 ~10 次，匹配免费额度）
-  repository_dispatch:
-    types: [trigger_quake]
+  # 1. 每 3 天执行一次
+  schedule:
+    - cron: '0 0 */3 * *'
 
-  # 2. 保留手动触发，方便调试
+  # 2. 允许手动触发
   workflow_dispatch:
 
 jobs:
@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,7 +30,14 @@ jobs:
       - name: Run Quake Scanner
         env:
           QUAKE_API_KEY: ${{ secrets.QUAKE_API_KEY }}
-          PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
-          PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
+          OUTPUT_FILE: .github/data/quake.txt
         run: |
           python .github/scripts/quake.py
+
+      - name: Commit and push results
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .github/data/quake.txt
+          git diff --cached --quiet || git commit -m "chore(data): update quake results [skip ci]"
+          git push

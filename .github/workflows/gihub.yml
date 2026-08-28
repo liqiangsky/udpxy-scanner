@@ -1,15 +1,11 @@
-name: Github Task Push
+name: GitHub Scanner
 
 on:
-  # 1. 允许通过我们上面的 Worker 远程触发
-  repository_dispatch:
-    types: [trigger_github]
+  # 1. 每小时执行一次
+  schedule:
+    - cron: '0 * * * *'
 
-  # 2. 同时也保留定时触发（比如每2小时，可选）
-#  schedule:
-#    - cron: '0 */2 * * *'
-
-  # 3. 保留手动点击触发
+  # 2. 允许手动触发
   workflow_dispatch:
 
 jobs:
@@ -19,21 +15,30 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'  #  已修正为 python-version
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
           pip install aiohttp
 
-      - name: Run Python Script
+      - name: Run GitHub Scanner
         env:
-          PREFETCH_QUERIES: ${{ toJSON(github.event.client_payload.prefetch_queries) }}
           MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-          PUSH_CALLBACK_URL: ${{ secrets.PUSH_CALLBACK_URL }}
-          PUSH_API_KEY: ${{ secrets.PUSH_API_KEY }}
+          PREFETCH_QUERIES: '["/udp/ extension:m3u", "/rtp/ extension:m3u", "/udp/ extension:txt", "/rtp/ extension:txt", "filename:result.txt path:output/ipv4"]'
+          OUTPUT_FILE: .github/data/github.txt
         run: |
           python .github/scripts/github.py
+
+      - name: Commit and push results
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .github/data/github.txt
+          git diff --cached --quiet || git commit -m "chore(data): update github results [skip ci]"
+          git push

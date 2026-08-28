@@ -2,7 +2,7 @@
 360 Quake 测绘 API 扫描脚本
 ============================
 - 每次触发仅调用 1 次 API（start:1, size:999）
-- 解析结果，过滤内网，分批推送到后端
+- 解析结果，过滤内网，写入数据文件
 - 由订阅调度器每 3 天触发一次，月均 ~10 次调用
 - 完善的错误处理：API Key 校验、HTTP 异常、业务错误码、JSON 解析异常、配额超限
 """
@@ -29,8 +29,7 @@ logger = logging.getLogger("quake_scanner")
 # ──────────────────────────────────────────────
 QUAKE_API_KEY = os.getenv("QUAKE_API_KEY", "").strip()
 QUERY = '(app:"udpxy multicast UDP-to-HTTP") AND country_cn: "中国"'
-PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "").strip()
-PUSH_API_KEY = os.getenv("PUSH_API_KEY", "").strip()
+OUTPUT_FILE = os.getenv("OUTPUT_FILE", ".github/data/quake.txt")
 
 # 数据源标识
 SOURCE_TYPE = "360quake"
@@ -38,7 +37,6 @@ SOURCE_NAME = "360Quake"
 
 # 分页与推送配置
 PAGE_SIZE = 700
-BATCH_SIZE = 500
 API_TIMEOUT = 30
 MAX_RETRIES = 3
 
@@ -68,10 +66,6 @@ def validate_env() -> bool:
     missing = []
     if not QUAKE_API_KEY:
         missing.append("QUAKE_API_KEY")
-    if not PUSH_CALLBACK_URL:
-        missing.append("PUSH_CALLBACK_URL")
-    if not PUSH_API_KEY:
-        missing.append("PUSH_API_KEY")
 
     if missing:
         logger.error(f"❌ 缺少必需的环境变量: {', '.join(missing)}")
@@ -82,8 +76,6 @@ def validate_env() -> bool:
     logger.info(f"   SOURCE_TYPE: {SOURCE_TYPE}")
     logger.info(f"   QUERY: {QUERY[:80]}...")
     logger.info(f"   PAGE_SIZE: {PAGE_SIZE}")
-    logger.info(f"   BATCH_SIZE: {BATCH_SIZE}")
-    logger.info(f"   PUSH_CALLBACK_URL: {PUSH_CALLBACK_URL[:50]}...")
     return True
 
 
@@ -275,113 +267,42 @@ def parse_hosts(data: dict) -> tuple[set, int]:
     return hosts, filtered
 
 
-# ──────────────────────────────────────────────
-# 6. 分批推送到后端
-# ──────────────────────────────────────────────
-
-async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
-    """
-    将去重后的 host 列表分批推送到后端
-    每批 BATCH_SIZE 个，批次间隔 1 秒
-    """
-    if not hosts_list:
-        logger.warning("⚠️ 没有有效 host，跳过推送")
-        return
-
-    total = len(hosts_list)
-    headers = {
-        "Content-Type": "application/json",
-        "X-API-Key": PUSH_API_KEY,
-    }
-    total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
-    success_count = 0
-    fail_count = 0
-
-    logger.info(f"📤 开始推送，共 {total} 个 host，分 {total_batches} 批")
-
-    for i in range(0, total, BATCH_SIZE):
-        batch = hosts_list[i:i + BATCH_SIZE]
-        payload = {
-            "sourceType": SOURCE_TYPE,
-            "sourceName": SOURCE_NAME,
-            "hosts": [{"host": h} for h in batch],
-        }
-
-        batch_num = i // BATCH_SIZE + 1
-
-        # 打印每批推送的完整数据结构
-        logger.info(f"📦 推送批次 {batch_num}/{total_batches} 数据结构:")
-        logger.info(json.dumps(payload, ensure_ascii=False, indent=2))
-
-        try:
-            async with session.post(
-                PUSH_CALLBACK_URL,
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=30),
-                allow_redirects=True
-            ) as resp:
-                if resp.status in (200, 201):
-                    logger.info(f"✅ 批次 {batch_num}/{total_batches} 推送成功（{len(batch)} 个）")
-                    success_count += len(batch)
-                elif resp.status in (301, 302, 307, 308):
-                    logger.warning(f"↪️ 批次 {batch_num}/{total_batches} 收到重定向 {resp.status}，已跳过")
-                    # 重定向通常意味着 URL 需要更新，但跨请求跟进也没意义
-                else:
-                    # 尝试读取错误响应
-                    try:
-                        error_detail = await resp.text()
-                    except Exception:
-                        error_detail = "(无法读取)"
-                    logger.error(f"❌ 批次 {batch_num}/{total_batches} 推送失败，状态码: {resp.status}")
-                    logger.error(f"   响应: {error_detail[:200]}")
-                    fail_count += len(batch)
-
-        except asyncio.TimeoutError:
-            logger.error(f"❌ 批次 {batch_num}/{total_batches} 推送超时")
-            fail_count += len(batch)
-        except aiohttp.ClientError as e:
-            logger.error(f"❌ 批次 {batch_num}/{total_batches} 网络异常: {e}")
-            fail_count += len(batch)
-        except Exception as e:
-            logger.error(f"❌ 批次 {batch_num}/{total_batches} 未知异常: {e}")
-            fail_count += len(batch)
-
-        # 批次间隔，避免后端洪峰
-        if i + BATCH_SIZE < total:
-            await asyncio.sleep(1)
-
-    logger.info(f"📊 推送汇总: 成功 {success_count} 个，失败 {fail_count} 个 / 共 {total} 个")
+def write_hosts_to_file(hosts: list, output_path: str):
+    """将主机列表写入文件，每行一个 host"""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        for host in sorted(hosts):
+            f.write(host + "\n")
+    logger.info(f"✅ [写入] 已将 {len(hosts)} 个 host 写入 {output_path}")
 
 
 # ──────────────────────────────────────────────
-# 7. 主流程
+# 6. 主流程
 # ──────────────────────────────────────────────
 
 async def main():
-    """主流程：校验 → 调用 API → 解析 → 推送"""
+    """主流程：校验 → 调用 API → 解析 → 写入文件"""
     start_time = datetime.now()
     logger.info("=" * 50)
     logger.info("🚀 360 Quake 扫描任务启动")
     logger.info(f"   时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 50)
 
-    # ── 7.1 环境变量校验 ──
+    # ── 6.1 环境变量校验 ──
     if not validate_env():
         logger.error("❌ 环境变量校验失败，终止任务")
         sys.exit(1)
 
-    # ── 7.2 创建 HTTP 会话（禁用 SSL 验证，兼容 360 Quake 的证书问题） ──
+    # ── 6.2 创建 HTTP 会话（禁用 SSL 验证，兼容 360 Quake 的证书问题） ──
     connector = aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
-        # ── 7.3 调用 API ──
+        # ── 6.3 调用 API ──
         resp = await fetch_quake_data(session)
         if resp is None:
             logger.error("❌ API 调用失败，终止任务")
             sys.exit(1)
 
-        # ── 7.4 解析数据 ──
-        # 打印完整 API 响应
+        # ── 6.4 解析数据 ──
         logger.info("=" * 50)
         logger.info("📦 360 Quake API 完整响应:")
         logger.info(json.dumps(resp, ensure_ascii=False, indent=2))
@@ -391,18 +312,14 @@ async def main():
         total_in_response = len(resp.get("data", []))
         logger.info(f"📊 API 返回 {total_in_response} 条，过滤内网 {filtered_count} 条，有效 host {len(hosts)} 个")
 
-        # ── 7.5 推送数据 ──
+        # ── 6.5 写入数据文件 ──
         if hosts:
             hosts_list = list(hosts)
-            await push_to_backend(session, hosts_list)
-
-            # 网络缓冲：确保 TCP 缓冲区数据全部发出
-            logger.info("⏳ 网络缓冲 3 秒，确保数据包全部离开发送端...")
-            await asyncio.sleep(3)
+            write_hosts_to_file(hosts_list, OUTPUT_FILE)
         else:
-            logger.warning("⚠️ 没有有效 host，跳过推送")
+            logger.warning("⚠️ 没有有效 host，跳过写入")
 
-    # ── 7.6 完成 ──
+    # ── 6.6 完成 ──
     elapsed = (datetime.now() - start_time).total_seconds()
     logger.info("=" * 50)
     logger.info(f"🎉 360 Quake 扫描任务完成，耗时 {elapsed:.1f} 秒")

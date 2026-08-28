@@ -4,7 +4,7 @@
 1. Playwright 访问目标 URL（自动过加速乐等防护）
 2. 从页面提取 JSON 数据
 3. 内置 ZoomEye 数据清洗器（仅提取 host，去重后打包）
-4. 异步推送回调接口（发射后不管，防超时）
+4. 写入数据文件（每行一个 host）
 """
 import os
 import sys
@@ -13,7 +13,6 @@ import asyncio
 import logging
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright
-import aiohttp
 
 # 1. 初始化日志规范
 logging.basicConfig(
@@ -27,14 +26,13 @@ logger = logging.getLogger("zoomeye_scanner")
 SOURCE_TYPE = "zoomeye"
 SOURCE_NAME = "钟馗之眼"
 
-# 💡 你的后端推送回调配置
-PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
-PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
+# 输出文件路径
+OUTPUT_FILE = os.getenv("OUTPUT_FILE", ".github/data/zoomeye.txt")
 
 # app="udpxy multicast UDP-to-HTTP" && country="中国"
-# SOURCE_URL = "https://www.zoomeye.ai/api/search?q=YXBwPSJ1ZHB4eSBtdWx0aWNhc3QgVURQLXRvLUhUVFAiICYmIGNvdW50cnk9IuS4reWbvSI%3D"
+SOURCE_URL = "https://www.zoomeye.ai/api/search?q=YXBwPSJ1ZHB4eSBtdWx0aWNhc3QgVURQLXRvLUhUVFAiICYmIGNvdW50cnk9IuS4reWbvSI%3D"
 # "udpxy" && country="China" && "Content-Type: application/octet-stream"
-SOURCE_URL = "https://www.zoomeye.ai/api/search?q=InVkcHh5IiAmJiBjb3VudHJ5PSJDaGluYSIgJiYgIkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtIg%3D%3D"
+
 # "udpxy" && country="China" && "Content-Type: application/octet-stream" && subdivisions="Hainan"
 
 
@@ -94,35 +92,13 @@ def clean_zoomeye_data(data: dict) -> list:
     return sources
 
 
-async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
-    """异步任务收尾：打包去重清洗后的数据投递给后端（发射后不管，防超时）"""
-    if not hosts_list:
-        logger.warning("⚠️ [后端推送] 资产列表为空，跳过回调推送")
-        return
-
-    payload = {
-        "sourceType": SOURCE_TYPE,
-        "sourceName": SOURCE_NAME,
-        "hosts": hosts_list
-    }
-
-    headers = {
-       "Content-Type": "application/json",
-       "X-API-Key": PUSH_API_KEY,
-    }
-
-    logger.info(f"🚀 [后端推送] 正在打包 {len(hosts_list)} 个去重资产推送回控制后端...")
-    try:
-        async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=10, allow_redirects=True) as resp:
-            if resp.status in [200, 201, 202]:
-                logger.info(f"🎉 [后端推送] 成功打通回调链路！数据已移交至网络缓冲区 (状态码: {resp.status})")
-            elif resp.status in [301, 302, 307, 308]:
-                logger.info(f"↪ [后端推送] 收到重定向 {resp.status} -> {resp.headers.get('Location', '?')}，忽略并跳过。")
-            else:
-                logger.error(f"🚨 [后端推送] 后端回调节点响应异常，状态码: {resp.status}")
-    except Exception as e:
-        # 即使这里提示网络异常，可能数据其实已经发出去了
-        logger.warning(f"📡 [后端推送] 触发预设发射策略: {str(e)}")
+def write_hosts_to_file(hosts: list, output_path: str):
+    """将主机列表写入文件，每行一个 host"""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        for host in sorted(hosts):
+            f.write(host + "\n")
+    logger.info(f"✅ [写入] 已将 {len(hosts)} 个 host 写入 {output_path}")
 
 
 async def main():
@@ -134,12 +110,11 @@ async def main():
         logger.error("❌ 未抓取到有效数据，任务终止")
         return
 
-    # 2. 调用内置的内置 ZoomEye 清洗器清洗数据
+    # 2. 调用内置的 ZoomEye 清洗器清洗数据
     cleaned_hosts = clean_zoomeye_data(raw_data)
 
-    # 3. 异步高效推送到控制后端
-    async with aiohttp.ClientSession() as session:
-        await push_to_backend(session, cleaned_hosts)
+    # 3. 写入数据文件
+    write_hosts_to_file(cleaned_hosts, OUTPUT_FILE)
 
     logger.info("🏁 GitHub Action 爬取与清洗流程全自动化作业圆满结束。")
 
