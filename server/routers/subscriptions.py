@@ -8,7 +8,7 @@ from db.database import get_db, db_write_lock
 from db.models import ApiSubscriptionCreate
 from core.status import task_runner
 from services.source_cache import process_source_data
-from services.subscription_fetcher import fetch_subscription
+from services.subscription_fetcher import fetch_subscription_by_type
 from services.message_service import create_message, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_ERROR
 
 logger = logging.getLogger("订阅管理")
@@ -32,8 +32,8 @@ def api_create_subscription(data: ApiSubscriptionCreate):
         with get_db() as conn:
             try:
                 conn.execute(
-                    "INSERT INTO subscription (name, uid, url, enabled, fetchCron) VALUES (?, ?, ?, ?, ?)",
-                    (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron)
+                    "INSERT INTO subscription (name, uid, url, type, enabled, fetchCron) VALUES (?, ?, ?, ?, ?, ?)",
+                    (data.name, data.uid, data.url, data.type, 1 if data.enabled else 0, data.fetchCron)
                 )
                 sub_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
             except Exception as e:
@@ -52,8 +52,8 @@ def api_update_subscription(sub_id: int, data: ApiSubscriptionCreate):
             old = conn.execute("SELECT uid FROM subscription WHERE id=?", (sub_id,)).fetchone()
             old_uid = old["uid"]
             conn.execute(
-                "UPDATE subscription SET name=?, uid=?, url=?, enabled=?, fetchCron=?, updatedAt=? WHERE id=?",
-                (data.name, data.uid, data.url, 1 if data.enabled else 0, data.fetchCron, int(time.time()), sub_id)
+                "UPDATE subscription SET name=?, uid=?, url=?, type=?, enabled=?, fetchCron=?, updatedAt=? WHERE id=?",
+                (data.name, data.uid, data.url, data.type, 1 if data.enabled else 0, data.fetchCron, int(time.time()), sub_id)
             )
             if old_uid != data.uid:
                 conn.execute(
@@ -104,7 +104,7 @@ def api_fetch_subscription(sub_id: int):
         try:
             async def _do():
                 logger.info(f"📡 开始拉取订阅 {sub_info['name']}")
-                sources = await fetch_subscription(sub_info["name"], sub_info["uid"], sub_info["url"])
+                sources = await fetch_subscription_by_type(sub_info["name"], sub_info["uid"], sub_info["url"], sub_info.get("type", "api"))
                 if sources:
                     hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
                     await process_source_data(sub_info["uid"], hosts_data)
@@ -185,7 +185,7 @@ async def _fetch_single(row: dict) -> int:
 
     logger.info(f"📡 开始拉取订阅 {row['name']}")
     try:
-        sources = await fetch_subscription(row["name"], row["uid"], row["url"])
+        sources = await fetch_subscription_by_type(row["name"], row["uid"], row["url"], row.get("type", "api"))
         fetched = 0
         if sources:
             hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]

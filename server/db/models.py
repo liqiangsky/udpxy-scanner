@@ -26,6 +26,7 @@ class ApiSubscriptionCreate(BaseModel):
     name: str
     uid: str
     url: Optional[str] = ""
+    type: str = "api"
     enabled: bool = True
     fetchCron: str = ""
 

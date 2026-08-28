@@ -94,6 +94,7 @@ def init_db():
             name TEXT NOT NULL,
             uid TEXT NOT NULL UNIQUE,
             url TEXT DEFAULT '',
+            type TEXT DEFAULT 'api',
             enabled INTEGER DEFAULT 1,
             fetchCron TEXT DEFAULT '',
             lastFetchAt INTEGER DEFAULT NULL,

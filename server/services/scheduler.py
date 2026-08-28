@@ -245,9 +245,9 @@ async def handle_heartbeat() -> dict:
             return (sub_dict, -1)  # -1 表示跳过
         logger.info(f"⏰ 订阅触发 {sub_dict['name']} -> cron: {fetch_cron}")
         try:
-            from services.subscription_fetcher import fetch_subscription
+            from services.subscription_fetcher import fetch_subscription_by_type
             from services.source_cache import process_source_data
-            sources = await fetch_subscription(sub_dict["name"], sub_dict["uid"], sub_dict["url"])
+            sources = await fetch_subscription_by_type(sub_dict["name"], sub_dict["uid"], sub_dict["url"], sub_dict.get("type", "api"))
             if sources:
                 hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
                 await process_source_data(sub_dict["uid"], hosts_data)
