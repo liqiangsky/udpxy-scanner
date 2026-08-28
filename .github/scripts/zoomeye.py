@@ -96,8 +96,8 @@ def write_hosts_to_file(hosts: list, output_path: str):
     """将主机列表写入文件，每行一个 host"""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        for host in sorted(hosts):
-            f.write(host + "\n")
+        for host in sorted(hosts, key=lambda x: x.get("host", "")):
+            f.write(host["host"] + "\n")
     logger.info(f"✅ [写入] 已将 {len(hosts)} 个 host 写入 {output_path}")
 
 
