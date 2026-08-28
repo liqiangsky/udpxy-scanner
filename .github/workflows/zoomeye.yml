@@ -28,6 +28,9 @@ jobs:
           pip install playwright aiohttp
           playwright install chromium
 
+      - name: Prepare data directory
+        run: mkdir -p .github/data
+
       - name: Run ZoomEye Scanner
         env:
           OUTPUT_FILE: .github/data/zoomeye.txt
@@ -38,6 +41,14 @@ jobs:
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add .github/data/zoomeye.txt
-          git diff --cached --quiet || git commit -m "chore(data): update zoomeye results [skip ci]"
-          git push
+          if [ -f "$OUTPUT_FILE" ]; then
+            git add "$OUTPUT_FILE"
+            if ! git diff --cached --quiet; then
+              git commit -m "chore(data): update zoomeye results [skip ci]"
+              git push
+            else
+              echo "No changes to commit"
+            fi
+          else
+            echo "Output file not found, skipping commit"
+          fi
