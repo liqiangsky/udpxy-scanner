@@ -1,11 +1,10 @@
 import os
 import re
-import sys
 import asyncio
 import json
 import logging
+from datetime import datetime
 import aiohttp
-from datetime import datetime, timedelta
 
 # 1. 初始化日志
 logging.basicConfig(
@@ -17,10 +16,7 @@ logger = logging.getLogger("github_scanner")
 
 # 2. 从 GitHub Action 环境变量中获取动态参数
 GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN", "")  # 必须配置，否则搜索 API 额度极低且无法翻页
-
-# 后端推送回调配置
-PUSH_CALLBACK_URL = os.getenv("PUSH_CALLBACK_URL", "")
-PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
+OUTPUT_FILE = os.getenv("OUTPUT_FILE", ".github/data/github.txt")
 
 # 数据来源
 SOURCE_TYPE = "github"
@@ -51,7 +47,7 @@ def is_private_ip(host_lower: str) -> bool:
                 pass
     return False
 
-async def parse_file_hosts(session: aiohttp.ClientSession, html_url: str) -> set:
+async def parse_file_hosts(session, html_url: str) -> set:
     """下载文件并提取里面的 IP:Port (Hosts)"""
     hosts = set()
     try:
@@ -70,7 +66,7 @@ async def parse_file_hosts(session: aiohttp.ClientSession, html_url: str) -> set
         logger.debug(f"⚠️ [解析文件失败] {html_url}: {e}")
     return hosts
 
-async def fetch_search_page(session: aiohttp.ClientSession, headers: dict, query: str, page: int) -> list:
+async def fetch_search_page(session, headers: dict, query: str, page: int) -> list:
     """调用 GitHub Code Search API 获取单页搜索结果，带重试机制"""
     params = {
         "q": query,
@@ -105,7 +101,7 @@ async def fetch_search_page(session: aiohttp.ClientSession, headers: dict, query
 
     return []
 
-async def search_single_keyword(session: aiohttp.ClientSession, headers: dict, keyword: str, max_pages: int = 5) -> set:
+async def search_single_keyword(session, headers: dict, keyword: str, max_pages: int = 5) -> set:
     """搜索单个关键词，流水线处理：获取单页 -> 并发解析当前页文件 -> 翻页休眠"""
     logger.info(f"🔍 [全网扫描] 开始挖掘关键词: {keyword}")
     keyword_hosts = set()
@@ -143,43 +139,13 @@ async def search_single_keyword(session: aiohttp.ClientSession, headers: dict, k
 
     return keyword_hosts
 
-async def push_to_backend(session: aiohttp.ClientSession, hosts_list: list):
-    """将去重资产分批（每批 500 个）回调投递给后端"""
-    BATCH_SIZE = 500
-    headers = {
-        "Content-Type": "application/json",
-        "X-API-Key": PUSH_API_KEY,
-    }
-
-    total = len(hosts_list)
-    for i in range(0, total, BATCH_SIZE):
-        batch = hosts_list[i:i + BATCH_SIZE]
-        payload = {
-            "sourceType": SOURCE_TYPE,
-            "sourceName": SOURCE_NAME,
-            "hosts": [{"host": h} for h in batch]
-        }
-
-        batch_num = i // BATCH_SIZE + 1
-        total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
-
-        try:
-            logger.info(f"Authorization 格式对齐 -> 正在推送第 {batch_num}/{total_batches} 批（{len(batch)} 个资产）...")
-
-            async with session.post(PUSH_CALLBACK_URL, json=payload, headers=headers, timeout=30, allow_redirects=True) as resp:
-                if resp.status in [200, 201]:
-                    logger.info(f"🚀 [批次 {batch_num}/{total_batches}] 后端已成功接收（状态码: {resp.status}）。")
-                elif resp.status in [301, 302, 307, 308]:
-                    logger.info(f"↪ [批次 {batch_num}/{total_batches}] 收到重定向 {resp.status} -> {resp.headers.get('Location', '?')}，忽略并跳过。")
-                else:
-                    logger.error(f"🚨 后端回调节点响应异常，状态码: {resp.status}")
-
-        except Exception as e:
-            logger.error(f"💥 第 {batch_num}/{total_batches} 批投递异常: {str(e)}")
-
-        # 批次间隔 1 秒，避免洪峰
-        if i + BATCH_SIZE < total:
-            await asyncio.sleep(1)
+def write_hosts_to_file(hosts: list, output_path: str):
+    """将主机列表写入文件，每行一个 host"""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        for host in sorted(hosts):
+            f.write(host + "\n")
+    logger.info(f"✅ [写入] 已将 {len(hosts)} 个 host 写入 {output_path}")
 
 async def main():
     logger.info("🚀 IPTV 关键词级代码扫描全自动化作业正在初始化...")
@@ -210,18 +176,12 @@ async def main():
 
         logger.info(f"📊 [阶段汇总] 全网多关键词搜索检索完成，共取得 {len(all_hosts)} 个不重复 HOST 资产。")
 
-        # ===== 核心逻辑 2：资产输出与后端推送 =====
+        # ===== 核心逻辑 2：资产输出到文件 =====
         hosts_list = list(all_hosts)
         if hosts_list:
-            # 1. 此时直接调用，由于 push_to_backend 里面不再 await 响应的 body 内容，这里会执行得非常快
-            await push_to_backend(session, hosts_list)
-
-            # 2. 💡 绝妙保障：因为这是在 GitHub Actions 里，为防进程因执行结束被瞬间杀死导致操作系统还来不及将 TCP 缓存区的数据发出，
-            # 这里强制给网卡 3 秒钟的清空时间，随后再关闭 ClientSession
-            logger.info("⏳ [网络缓冲] 预留 3 秒网络管道排空缓冲，确保异步数据包完美离线...")
-            await asyncio.sleep(3)
+            write_hosts_to_file(hosts_list, OUTPUT_FILE)
         else:
-            logger.warning("⚠️ 扫描流程已圆满结束，但本次作业没有捕获到任何符合规则的有效 Host。放弃回调推送。")
+            logger.warning("⚠️ 扫描流程已圆满结束，但本次作业没有捕获到任何符合规则的有效 Host。")
 
     logger.info("🎉 [作业圆满结束] 本次 GitHub Actions 自动化扫描流水线完美收尾。")
 
