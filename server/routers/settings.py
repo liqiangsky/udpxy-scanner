@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 from db.database import get_db, get_setting, _settings_cache, _settings_cache_lock, db_write_lock
-from db.models import GlobalSettingsUpdate
+from db.models import GlobalSettingsUpdate, Parameter
 from services.log_buffer import get_recent_logs
 
 router = APIRouter()
@@ -25,13 +25,21 @@ def api_get_settings():
 @router.put("/settings")
 def api_update_settings(data: GlobalSettingsUpdate):
     with db_write_lock:
-        with get_db() as conn:
-            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('concurrency', ?)", (str(data.concurrency),))
-            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('timeout', ?)", (str(data.timeout),))
-            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('config_delay', ?)", (str(data.configDelay),))
-            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('janitor_cron', ?)", (data.janitorCron,))
-            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('scan_cron', ?)", (data.scanCron,))
-            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('push_api_key', ?)", (data.pushApiKey,))
+        with get_db() as session:
+            settings_map = {
+                "concurrency": str(data.concurrency),
+                "timeout": str(data.timeout),
+                "config_delay": str(data.config_delay),
+                "janitor_cron": data.janitor_cron,
+                "scan_cron": data.scan_cron,
+                "push_api_key": data.push_api_key,
+            }
+            for key, value in settings_map.items():
+                row = session.query(Parameter).filter(Parameter.key == key).first()
+                if row:
+                    row.value = value
+                else:
+                    session.add(Parameter(key=key, value=value))
     with _settings_cache_lock:
         _settings_cache.clear()
     return {"ok": True}

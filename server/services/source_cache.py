@@ -6,6 +6,7 @@ import logging
 import time
 from typing import List, Optional
 from db.database import get_db, db_write_lock
+from db.models import Cache, Host
 
 logger = logging.getLogger("数据缓存")
 
@@ -19,9 +20,9 @@ def cache_sources(source_type: str, sources: List[dict]):
     now = int(time.time())
 
     with db_write_lock:
-        with get_db() as conn:
+        with get_db() as session:
             seen = set()
-            rows = []
+            count = 0
             for s in sources:
                 if s["host"] in seen:
                     continue
@@ -29,47 +30,46 @@ def cache_sources(source_type: str, sources: List[dict]):
                 if not region or region not in _CN_REGIONS:
                     continue
                 seen.add(s["host"])
-                rows.append((source_type, s["host"], region, s.get("geoOperator", ""), 1, now, now))
+                # 检查是否已存在
+                existing = session.query(Cache).filter(Cache.host == s["host"]).first()
+                if not existing:
+                    cache_entry = Cache(
+                        source_type=source_type,
+                        host=s["host"],
+                        geo_region=region,
+                        geo_operator=s.get("geoOperator", ""),
+                        status=1,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(cache_entry)
+                    count += 1
 
-            if rows:
-                conn.executemany(
-                    "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    rows
-                )
-                regions = set(r[2] for r in rows)
-                logger.info(f"💾 {source_type} 写入 {len(rows)} 条, 地区分布: {regions}")
+            if count:
+                session.commit()
+                regions = set(s.get("geoRegion", "") for s in sources if s.get("geoRegion") and s.get("geoRegion") in _CN_REGIONS)
+                logger.info(f"💾 {source_type} 写入 {count} 条, 地区分布: {regions}")
 
 
 def get_cached_hosts(source_type: str, region: str = "") -> List[str]:
-    with get_db() as conn:
+    with get_db() as session:
+        query = session.query(Cache.host).filter(Cache.source_type == source_type)
         if region:
-            rows = conn.execute(
-                "SELECT DISTINCT host FROM cache WHERE sourceType=? AND geoRegion=?",
-                (source_type, region)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT DISTINCT host FROM cache WHERE sourceType=?",
-                (source_type,)
-            ).fetchall()
-        return [r["host"] for r in rows]
+            query = query.filter(Cache.geo_region == region)
+        return [r.host for r in query.distinct().all()]
 
 
 def get_cached_geo_batch(hosts: List[str], chunk_size: int = 500) -> dict:
     if not hosts:
         return {}
     result = {}
-    with get_db() as conn:
+    with get_db() as session:
         for i in range(0, len(hosts), chunk_size):
             chunk = hosts[i:i + chunk_size]
-            placeholders = ",".join("?" for _ in chunk)
-            rows = conn.execute(
-                f"SELECT host, geoRegion, geoOperator FROM cache WHERE host IN ({placeholders})",
-                chunk
-            ).fetchall()
+            rows = session.query(Cache).filter(Cache.host.in_(chunk)).all()
             for row in rows:
-                if row["geoRegion"] or row["geoOperator"]:
-                    result[row["host"]] = {"geoRegion": row["geoRegion"], "geoOperator": row["geoOperator"]}
+                if row.geo_region or row.geo_operator:
+                    result[row.host] = {"geoRegion": row.geo_region, "geoOperator": row.geo_operator}
     return result
 
 
@@ -77,15 +77,11 @@ def get_existing_hosts_batch(hosts: List[str], chunk_size: int = 500) -> set:
     if not hosts:
         return set()
     result = set()
-    with get_db() as conn:
+    with get_db() as session:
         for i in range(0, len(hosts), chunk_size):
             chunk = hosts[i:i + chunk_size]
-            placeholders = ",".join("?" for _ in chunk)
-            rows = conn.execute(
-                f"SELECT DISTINCT host FROM host WHERE host IN ({placeholders})",
-                chunk
-            ).fetchall()
-            result.update(row["host"] for row in rows)
+            rows = session.query(Host.host).filter(Host.host.in_(chunk)).all()
+            result.update(r.host for r in rows)
     return result
 
 
@@ -93,13 +89,23 @@ def cache_host_geo_batch(rows: list):
     if not rows:
         return
     now = int(time.time())
-    batch_rows = [r + (1, now, now) for r in rows]
     with db_write_lock:
-        with get_db() as conn:
-            conn.executemany(
-                "INSERT OR IGNORE INTO cache (sourceType, host, geoRegion, geoOperator, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                batch_rows
-            )
+        with get_db() as session:
+            for row in rows:
+                source_type, host, geo_region, geo_operator = row
+                existing = session.query(Cache).filter(Cache.host == host).first()
+                if not existing:
+                    cache_entry = Cache(
+                        source_type=source_type,
+                        host=host,
+                        geo_region=geo_region,
+                        geo_operator=geo_operator,
+                        status=0,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(cache_entry)
+            session.commit()
 
 
 async def process_source_data(source_type: str, hosts: List[dict]) -> int:

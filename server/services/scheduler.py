@@ -8,6 +8,7 @@ import time
 import asyncio
 import aiohttp
 import logging
+from sqlalchemy import text
 from db.database import get_db, get_setting, db_write_lock
 from core.engine import trigger_background_queue
 from core.status import task_runner
@@ -77,7 +78,7 @@ async def execute_recheck() -> int:
     from services.validator import verify_single_host
 
     with get_db() as conn:
-        active_sources = [dict(r) for r in conn.execute("SELECT id, host, target, protocol FROM host").fetchall()]
+        active_sources = [dict(r._mapping) for r in conn.execute(text("SELECT id, host, target, protocol FROM host")).fetchall()]
 
     if not active_sources:
         return 0
@@ -118,9 +119,9 @@ async def execute_recheck() -> int:
             if success_items:
                 with db_write_lock:
                     with get_db() as conn:
-                        conn.executemany(
-                            "UPDATE host SET delay=?, updatedAt=?, protocol=? WHERE id=?",
-                            success_items
+                        conn.execute(
+                            text("UPDATE host SET delay=:delay, updatedAt=:updatedAt, protocol=:protocol WHERE id=:id"),
+                            [{"delay": s[0], "updatedAt": s[1], "protocol": s[2], "id": s[3]} for s in success_items]
                         )
 
             eliminated = 0
@@ -157,22 +158,22 @@ async def execute_recheck() -> int:
                 if second_success:
                     with db_write_lock:
                         with get_db() as conn:
-                            conn.executemany(
-                                "UPDATE host SET delay=?, updatedAt=?, protocol=? WHERE id=?",
-                                second_success
+                            conn.execute(
+                                text("UPDATE host SET delay=:delay, updatedAt=:updatedAt, protocol=:protocol WHERE id=:id"),
+                                [{"delay": s[0], "updatedAt": s[1], "protocol": s[2], "id": s[3]} for s in second_success]
                             )
                     logger.info(f"✅ [二次恢复] {len(second_success)} 个二次复测成功")
 
                 if second_failed_ids:
                     with db_write_lock:
                         with get_db() as conn:
-                            conn.executemany(
-                                "DELETE FROM host WHERE id=?",
-                                second_failed_ids
+                            conn.execute(
+                                text("DELETE FROM host WHERE id=:id"),
+                                [{"id": r[0]} for r in second_failed_ids]
                             )
-                            conn.executemany(
-                                "DELETE FROM cache WHERE host=?",
-                                [(h,) for h in second_failed_hosts]
+                            conn.execute(
+                                text("DELETE FROM cache WHERE host=:host"),
+                                [{"host": h} for h in second_failed_hosts]
                             )
                     eliminated = len(second_failed_ids)
                     eliminated_hosts_str = ', '.join(second_failed_hosts)
@@ -203,7 +204,7 @@ async def handle_heartbeat() -> dict:
     if cron_match(scan_cron, cron_now) and _should_exec("scan", now):
         if task_runner.is_idle():
             with get_db() as conn:
-                rows = conn.execute("SELECT id FROM config WHERE enabled=1").fetchall()
+                rows = conn.execute(text("SELECT id FROM config WHERE enabled=1")).fetchall()
             if rows:
                 ids = [r["id"] for r in rows]
                 trigger_background_queue(ids, skip_disabled=True)
@@ -227,7 +228,7 @@ async def handle_heartbeat() -> dict:
     # 订阅源定时拉取（与扫描/复测独立运行，互不阻塞）
     with get_db() as conn:
         subscription = conn.execute(
-            "SELECT * FROM subscription WHERE enabled=1 AND fetchCron!=''"
+            text("SELECT * FROM subscription WHERE enabled=1 AND fetchCron!=''")
         ).fetchall()
 
     async def _fetch_and_process(sub_dict):
@@ -256,7 +257,7 @@ async def handle_heartbeat() -> dict:
         finally:
             task_runner.finish_fetch(sub_id)
 
-    sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub)) for sub in subscription))
+    sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub._mapping)) for sub in subscription))
     for result in sub_results:
         if result is None:
             continue
@@ -266,8 +267,8 @@ async def handle_heartbeat() -> dict:
         with db_write_lock:
             with get_db() as conn:
                 conn.execute(
-                    "UPDATE subscription SET lastFetchAt=? WHERE id=?",
-                    (int(time.time()), sub_dict["id"])
+                    text("UPDATE subscription SET lastFetchAt=:lastFetchAt WHERE id=:id"),
+                    {"lastFetchAt": int(time.time()), "id": sub_dict["id"]}
                 )
         triggered.append({"task": f"sub_{sub_dict['id']}", "name": sub_dict["name"], "fetched": source_count})
 
