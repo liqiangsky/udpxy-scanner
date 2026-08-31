@@ -1,4 +1,3 @@
-import sqlite3
 import os
 import time
 import threading
@@ -6,6 +5,12 @@ import logging
 import shutil
 from contextlib import contextmanager
 from datetime import datetime
+
+from sqlalchemy import create_engine, text, event
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import StaticPool
+
+from db.models import Base, Parameter
 
 logger = logging.getLogger(__name__)
 
@@ -18,37 +23,68 @@ _settings_cache = {}
 _settings_cache_ttl = 30
 _settings_cache_lock = threading.Lock()
 
-_local = threading.local()
-_local_lock = threading.Lock()
+# SQLAlchemy engine（单例，进程级）
+_engine = None
+_SessionFactory = None
 
 
-def _get_persistent_conn(db_path: str) -> sqlite3.Connection:
-    key = db_path
-    conn = getattr(_local, key, None)
-    if conn is not None:
-        try:
-            conn.execute("SELECT 1")
-            return conn
-        except Exception:
-            try:
-                conn.close()
-            except Exception:
-                pass
-    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA temp_store=MEMORY")
-    conn.execute("PRAGMA cache_size=-64000")
-    with _local_lock:
-        setattr(_local, key, conn)
-    return conn
+def _get_engine():
+    """获取或创建 SQLAlchemy engine（线程安全）"""
+    global _engine, _SessionFactory
+    if _engine is None:
+        with threading.Lock():
+            if _engine is None:
+                os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+                # SQLite: use check_same_thread=False + StaticPool for simplicity
+                # For production with uvicorn workers, consider QueuePool
+                _engine = create_engine(
+                    f"sqlite:///{DB_PATH}",
+                    connect_args={"check_same_thread": False},
+                    poolclass=StaticPool,
+                )
+                # 应用 SQLite 优化 PRAGMAs
+                @event.listens_for(_engine, "connect")
+                def set_sqlite_pragma(conn, record):
+                    cursor = conn.cursor()
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                    cursor.execute("PRAGMA synchronous=NORMAL")
+                    cursor.execute("PRAGMA foreign_keys=ON")
+                    cursor.execute("PRAGMA temp_store=MEMORY")
+                    cursor.execute("PRAGMA cache_size=-64000")
+                    cursor.close()
+
+                _SessionFactory = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
+    return _engine, _SessionFactory
+
+
+def _ensure_columns(engine):
+    """检查并补全所有表的缺失列（兼容旧数据库）"""
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    for table_name, table in Base.metadata.tables.items():
+        if table_name not in existing_tables:
+            continue
+        existing_cols = {col['name'] for col in inspector.get_columns(table_name)}
+        for col in table.columns:
+            # col.name 是数据库实际列名（如 dataSource），col.key 是 Python 属性名（如 data_source）
+            db_col_name = col.name
+            if db_col_name not in existing_cols:
+                col_type = col.type.compile(engine.dialect)
+                nullable = "NULL" if col.nullable else "NOT NULL DEFAULT ''"
+                sql = f"ALTER TABLE {table_name} ADD COLUMN {db_col_name} {col_type} {nullable}"
+                try:
+                    with engine.connect() as conn:
+                        conn.execute(text(sql))
+                        conn.commit()
+                    logger.info(f"✅ 补全列: {table_name}.{db_col_name}")
+                except Exception as e:
+                    logger.warning(f"⚠️ 补全列失败 {table_name}.{db_col_name}: {e}")
 
 
 def init_db():
-    """初始化数据库（全部表都在 data.db 中）"""
+    """初始化数据库（创建所有表和默认数据）"""
     # 启动后台维护线程
     start_maintenance_thread()
 
@@ -56,124 +92,29 @@ def init_db():
     if os.path.exists(DB_PATH) and not check_integrity():
         logger.warning("启动时数据库完整性检查失败，尝试备份后重建...")
         _backup_and_recover()
-        return  # 重建后直接返回，避免重复创建
+        return
 
-    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    # 创建所有表
+    engine, _ = _get_engine()
+    Base.metadata.create_all(engine)
 
-    # 高并发优化
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA temp_store=MEMORY")
-    conn.execute("PRAGMA cache_size=-64000")
-
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS parameter (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS config (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            dataSource TEXT NOT NULL,
-            templateRegion TEXT DEFAULT '',
-            templateOperator TEXT DEFAULT '',
-            templateTargetName TEXT DEFAULT '',
-            templateTargetAddress TEXT DEFAULT '',
-            enabled INTEGER DEFAULT 1,
-            createdAt INTEGER DEFAULT 0,
-            updatedAt INTEGER DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS idx_config_enabled ON config(enabled);
-
-        CREATE TABLE IF NOT EXISTS subscription (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            uid TEXT NOT NULL UNIQUE,
-            url TEXT DEFAULT '',
-            enabled INTEGER DEFAULT 1,
-            fetchCron TEXT DEFAULT '',
-            lastFetchAt INTEGER DEFAULT NULL,
-            createdAt INTEGER DEFAULT 0,
-            updatedAt INTEGER DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS idx_subscription_enabled_cron ON subscription(enabled, fetchCron);
-
-        CREATE TABLE IF NOT EXISTS cache (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sourceType TEXT NOT NULL,
-            host TEXT NOT NULL,
-            geoRegion TEXT DEFAULT '',
-            geoOperator TEXT DEFAULT '',
-            active INTEGER DEFAULT 0,
-            status INTEGER DEFAULT 0,
-            createdAt INTEGER DEFAULT 0,
-            updatedAt INTEGER DEFAULT NULL
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_cache_unique ON cache(host);
-        CREATE INDEX IF NOT EXISTS idx_cache_sourceType ON cache(sourceType);
-
-        CREATE TABLE IF NOT EXISTS host (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            host TEXT NOT NULL,
-            ip TEXT NOT NULL,
-            port INTEGER NOT NULL,
-            sourceType TEXT DEFAULT '',
-            sourceName TEXT DEFAULT '',
-            region TEXT NOT NULL,
-            operator TEXT NOT NULL,
-            geoRegion TEXT DEFAULT '',
-            geoOperator TEXT DEFAULT '',
-            delay INTEGER NOT NULL,
-            protocol TEXT NOT NULL,
-            target TEXT NOT NULL,
-            channelName TEXT NOT NULL,
-            createdAt INTEGER NOT NULL,
-            updatedAt INTEGER NOT NULL
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_host_unique ON host(host, target, channelName);
-        CREATE INDEX IF NOT EXISTS idx_host_region_operator ON host(region, operator);
-        CREATE INDEX IF NOT EXISTS idx_host_geo ON host(geoRegion, geoOperator);
-        CREATE INDEX IF NOT EXISTS idx_host_host ON host(host);
-        CREATE INDEX IF NOT EXISTS idx_host_sourceType ON host(sourceType);
-        CREATE INDEX IF NOT EXISTS idx_host_geoRegion ON host(geoRegion);
-        CREATE INDEX IF NOT EXISTS idx_host_geoOperator ON host(geoOperator);
-
-        CREATE TABLE IF NOT EXISTS notification (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT NOT NULL DEFAULT 'info',
-            title TEXT NOT NULL,
-            content TEXT DEFAULT '',
-            source TEXT DEFAULT '',
-            read INTEGER DEFAULT 0,
-            createdAt INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_notification_read ON notification(read);
-        CREATE INDEX IF NOT EXISTS idx_notification_created ON notification(createdAt);
-    """)
+    # 检查并补全旧数据库缺失的列
+    _ensure_columns(engine)
 
     # 初始化默认密码
-    row = conn.execute(
-        "SELECT value FROM parameter WHERE key='password_hash'"
-    ).fetchone()
-
-    if not row:
-        import hashlib
-
-        default_hash = "pbkdf2$" + hashlib.pbkdf2_hmac(
-            "sha256",
-            os.getenv("PASSWORD", "admin").encode(),
-            b"udpxy-scanner-password-salt",
-            100000
-        ).hex()
-
-        conn.execute(
-            "INSERT INTO parameter (key, value) VALUES ('password_hash', ?)",
-            (default_hash,)
-        )
+    with _SessionFactory() as session:
+        row = session.query(Parameter).filter(Parameter.key == "password_hash").first()
+        if not row:
+            import hashlib
+            default_hash = "pbkdf2$" + hashlib.pbkdf2_hmac(
+                "sha256",
+                os.getenv("PASSWORD", "admin").encode(),
+                b"udpxy-scanner-password-salt",
+                100000
+            ).hex()
+            param = Parameter(key="password_hash", value=default_hash)
+            session.add(param)
+        session.commit()
 
     # 初始化默认配置
     default_settings = {
@@ -184,40 +125,41 @@ def init_db():
         "janitor_cron": "",
         "push_api_key": ""
     }
-
-    for k, v in default_settings.items():
-        conn.execute(
-            "INSERT OR IGNORE INTO parameter (key, value) VALUES (?, ?)",
-            (k, v)
-        )
-
-    conn.commit()
-    conn.close()
+    with _SessionFactory() as session:
+        for k, v in default_settings.items():
+            existing = session.query(Parameter).filter(Parameter.key == k).first()
+            if not existing:
+                session.add(Parameter(key=k, value=v))
+        session.commit()
 
 
 @contextmanager
 def get_db():
-    """数据库连接管理（全部表共用 data.db，线程级持久连接）"""
-    conn = _get_persistent_conn(DB_PATH)
+    """数据库会话管理（yield Session 对象）"""
+    engine, SessionFactory = _get_engine()
+    session = SessionFactory()
     try:
-        yield conn
-        conn.commit()
+        yield session
+        session.commit()
     except Exception:
-        conn.rollback()
+        session.rollback()
         raise
+    finally:
+        session.close()
 
 
 def check_integrity() -> bool:
     """检查数据库完整性，返回 True 表示正常"""
     try:
-        conn = _get_persistent_conn(DB_PATH)
-        result = conn.execute("PRAGMA integrity_check").fetchone()
-        if result[0] == "ok":
-            logger.debug("数据库完整性检查通过")
-            return True
-        else:
-            logger.error(f"数据库完整性检查失败: {result[0]}")
-            return False
+        engine, _ = _get_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA integrity_check")).fetchone()
+            if result[0] == "ok":
+                logger.debug("数据库完整性检查通过")
+                return True
+            else:
+                logger.error(f"数据库完整性检查失败: {result[0]}")
+                return False
     except Exception as e:
         logger.error(f"数据库完整性检查异常: {e}")
         return False
@@ -270,18 +212,16 @@ def _backup_and_recover():
 
 
 def get_setting(key: str, default: str) -> str:
+    """获取设置值（带缓存）"""
     now = time.time()
     with _settings_cache_lock:
         cached = _settings_cache.get(key)
         if cached and now - cached[1] < _settings_cache_ttl:
             return cached[0]
     try:
-        with get_db() as conn:
-            row = conn.execute(
-                "SELECT value FROM parameter WHERE key=?",
-                (key,)
-            ).fetchone()
-            val = row["value"] if row else default
+        with get_db() as session:
+            row = session.query(Parameter).filter(Parameter.key == key).first()
+            val = row.value if row else default
             with _settings_cache_lock:
                 _settings_cache[key] = (val, now)
             return val
@@ -290,6 +230,13 @@ def get_setting(key: str, default: str) -> str:
 
 
 import asyncio as _asyncio
+
+
+def _row_to_dict(row):
+    """将 SQLAlchemy ORM 行转换为 dict，排除内部状态"""
+    if row is None:
+        return None
+    return {key: getattr(row, key) for key in row.__mapper__.column_attrs.keys()}
 
 
 async def run_in_thread(func, *args, **kwargs):

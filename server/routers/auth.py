@@ -4,8 +4,9 @@ import uuid
 import time
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from db.database import get_db, get_setting, db_write_lock
+from db.models import Parameter
 
 router = APIRouter()
 
@@ -110,21 +111,27 @@ def api_logout(data: LogoutRequest):
 
 
 class ChangePasswordRequest(BaseModel):
-    oldPassword: str
-    newPassword: str
+    old_password: str = Field(alias="oldPassword")
+    new_password: str = Field(alias="newPassword")
+
+    model_config = {"populate_by_name": True}
 
 
 @router.post("/change-password")
 def api_change_password(request: Request, req: ChangePasswordRequest):
     stored_hash = get_setting("password_hash", "")
-    if not _verify_password(req.oldPassword, stored_hash):
+    if not _verify_password(req.old_password, stored_hash):
         raise HTTPException(400, "旧密码错误")
-    if len(req.newPassword) < 4:
+    if len(req.new_password) < 4:
         raise HTTPException(400, "新密码至少 4 位")
-    new_hash = "pbkdf2$" + hash_password(req.newPassword)
+    new_hash = "pbkdf2$" + hash_password(req.new_password)
     with db_write_lock:
-        with get_db() as conn:
-            conn.execute("INSERT OR REPLACE INTO parameter (key, value) VALUES ('password_hash', ?)", (new_hash,))
+        with get_db() as session:
+            row = session.query(Parameter).filter(Parameter.key == "password_hash").first()
+            if row:
+                row.value = new_hash
+            else:
+                session.add(Parameter(key="password_hash", value=new_hash))
     # 清除密码设置缓存，确保下次登录读到新密码
     from db.database import _settings_cache
     _settings_cache.pop("password_hash", None)

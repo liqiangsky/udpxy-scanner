@@ -42,6 +42,10 @@
 
           <div class="card-grid">
             <div class="grid-item">
+              <span class="lbl">订阅类型</span>
+              <span class="txt">{{ sub.type === 'text' ? '文本' : 'API' }}</span>
+            </div>
+            <div class="grid-item">
               <span class="lbl">订阅 URL</span>
               <span class="txt mono truncate">{{ sub.url }}</span>
             </div>
@@ -98,6 +102,24 @@
             <input v-model="formData.uid" type="text" placeholder="例：hunter，用于 sourceType" />
           </div>
           <div class="form-item">
+            <label>订阅类型</label>
+            <div class="type-selector">
+              <select v-model="formData.type">
+                <option value="api">API（JSON）</option>
+                <option value="text">文本（m3u/txt）</option>
+              </select>
+              <button
+                v-if="formData.type === 'api'"
+                class="view-json-btn"
+                @click="openJsonPreview()"
+                title="查看 JSON 格式示例"
+              >
+                <span class="material-symbols-outlined icon-g-btn">visibility</span>
+                查看
+              </button>
+            </div>
+          </div>
+          <div class="form-item">
             <label>订阅 URL</label>
             <input
               v-model="formData.url"
@@ -120,6 +142,17 @@
         </div>
       </div>
     </div>
+
+    <!-- JSON 预览弹窗 -->
+    <div class="form-overlay" v-if="jsonPreview.visible" @click="jsonPreview.visible = false">
+      <div class="form-drawer json-preview-drawer" @click.stop>
+        <div class="drawer-header">
+          <h2>返回示例</h2>
+          <button class="close-x-btn" @click="jsonPreview.visible = false">×</button>
+        </div>
+        <pre class="json-preview-body">{{ jsonPreview.formatted }}</pre>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -134,7 +167,26 @@ const loaded = ref(false)
 const fetchingMap = ref({})
 const formVisible = ref(false)
 const editingId = ref(null)
-const formData = reactive({ name: '', uid: '', url: '', fetchCron: '' })
+const formData = reactive({ name: '', uid: '', url: '', type: 'api', fetchCron: '' })
+
+// JSON 预览
+const jsonPreview = reactive({ visible: false, formatted: '' })
+
+const openJsonPreview = () => {
+  jsonPreview.visible = true
+  jsonPreview.formatted = JSON.stringify(
+    {
+      sourceType: 'hunter',
+      sourceName: '鹰图平台',
+      hosts: [
+        { host: '1.2.3.4:8080', geoRegion: '北京', geoOperator: '电信' },
+        { host: '5.6.7.8:9000', geoRegion: '上海', geoOperator: '联通' },
+      ],
+    },
+    null,
+    2
+  )
+}
 
 const loadSubscriptions = async () => {
   try {
@@ -151,6 +203,7 @@ const startAddSub = () => {
   formData.name = ''
   formData.uid = ''
   formData.url = ''
+  formData.type = 'api'
   formData.fetchCron = ''
   formVisible.value = true
 }
@@ -160,6 +213,7 @@ const startEditSub = (sub) => {
   formData.name = sub.name
   formData.uid = sub.uid
   formData.url = sub.url
+  formData.type = sub.type || 'api'
   formData.fetchCron = sub.fetchCron || ''
   formVisible.value = true
 }
@@ -180,6 +234,7 @@ const handleSaveSub = async () => {
         name: formData.name.trim(),
         uid: formData.uid.trim(),
         url: formData.url.trim(),
+        type: formData.type,
         fetchCron: formData.fetchCron.trim(),
       })
       toast.success('已更新')
@@ -188,6 +243,7 @@ const handleSaveSub = async () => {
         name: formData.name.trim(),
         uid: formData.uid.trim(),
         url: formData.url.trim(),
+        type: formData.type,
         fetchCron: formData.fetchCron.trim(),
       })
       toast.success('已添加')
@@ -218,6 +274,7 @@ const handleToggleEnabled = async (sub) => {
       name: sub.name?.trim(),
       uid: sub.uid?.trim(),
       url: sub.url?.trim(),
+      type: sub.type || 'api',
       fetchCron: (sub.fetchCron || '').trim(),
       enabled: !wasEnabled,
     })
@@ -617,6 +674,24 @@ input:checked + .slider:before {
   width: 100%;
   box-sizing: border-box;
 }
+.drawer-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-neutral);
+  border: none;
+  outline: none;
+  padding: 12px;
+  border-radius: var(--radius-input);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%238E8E93' d='M0 0h10L5 6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
 .form-item {
   display: flex;
   flex-direction: column;
@@ -626,6 +701,20 @@ input:checked + .slider:before {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
+}
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.form-hint-code {
+  font-family: var(--font-mono);
+  background: var(--bg-neutral);
+  padding: 4px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 4px;
+  word-break: break-all;
 }
 .drawer-actions {
   display: flex;
@@ -663,6 +752,55 @@ input:checked + .slider:before {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* ===== JSON 预览弹窗 ===== */
+.json-preview-drawer {
+  max-width: 480px;
+}
+.json-preview-body {
+  max-height: 55vh;
+  overflow: auto;
+  background: #1e1e1e;
+  border-radius: var(--radius-input);
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+/* ===== 查看按钮 ===== */
+.type-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.view-json-btn {
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-blue);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: var(--radius-input);
+  background: var(--bg-neutral);
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.view-json-btn:active {
+  background: rgba(0, 122, 255, 0.12);
+  transform: scale(0.94);
 }
 
 /* ===== Transition ===== */
