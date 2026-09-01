@@ -206,7 +206,7 @@ async def handle_heartbeat() -> dict:
             with get_db() as conn:
                 rows = conn.execute(text("SELECT id FROM config WHERE enabled=1")).fetchall()
             if rows:
-                ids = [r["id"] for r in rows]
+                ids = [r.id for r in rows]
                 trigger_background_queue(ids, skip_disabled=True)
                 triggered.append({"task": "scan", "config_ids": ids})
         else:
