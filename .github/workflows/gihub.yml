@@ -1,7 +1,7 @@
 name: GitHub Scanner
 
 on:
-  # 1. 每小时执行一次
+  # 1. 每2小时执行一次
   schedule:
     - cron: '1 */2 * * *'
 
