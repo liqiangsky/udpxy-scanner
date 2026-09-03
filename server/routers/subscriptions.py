@@ -79,12 +79,24 @@ def api_delete_subscription(sub_id: int):
     """删除 API 订阅"""
     with db_write_lock:
         with get_db() as session:
+            from db.models import Config
             sub = session.query(Subscription).filter(Subscription.id == sub_id).first()
             if not sub:
                 raise HTTPException(404, "订阅不存在")
             old_uid = sub.uid
             session.delete(sub)
             session.query(Cache).filter(Cache.source_type == old_uid).delete(synchronize_session="fetch")
+            # 清理所有引用了该订阅的配置的 dataSource 字段
+            configs = session.query(Config).filter(Config.data_source.like(f'%{old_uid}%')).all()
+            for cfg in configs:
+                parts = [p.strip() for p in cfg.data_source.split(',') if p.strip()]
+                parts = [p for p in parts if p != old_uid]
+                cfg.data_source = ','.join(parts)
+                if not cfg.data_source:
+                    cfg.enabled = 0
+                    logger.warning(f"⚠️ [订阅删除] cfg_id={cfg.id} 的 dataSource 已清空，已自动禁用该配置")
+            if configs:
+                logger.info(f"✅ [订阅删除] 已清理 {len(configs)} 个配置中对 '{old_uid}' 的引用")
     return {"ok": True}
 
 

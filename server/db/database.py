@@ -140,7 +140,8 @@ def get_db():
     session = SessionFactory()
     try:
         yield session
-        session.commit()
+        if session.dirty or session.new:
+            session.commit()
     except Exception:
         session.rollback()
         raise

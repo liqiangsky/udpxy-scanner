@@ -94,7 +94,6 @@ def _batch_insert_hosts(batch_rows: list):
                 session.query(Cache).filter(Cache.host.in_(hosts)).update(
                     {Cache.active: 1}, synchronize_session="fetch"
                 )
-            session.commit()
 
 
 async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False):
