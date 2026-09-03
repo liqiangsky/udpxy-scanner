@@ -2,8 +2,8 @@ name: GitHub Scanner
 
 on:
   # 1. 每小时执行一次
-  # schedule:
-  #   - cron: '18 * * * *'
+  schedule:
+    - cron: '30 * * * *'
 
   # 2. 允许手动触发
   workflow_dispatch:
