@@ -43,7 +43,6 @@
             <div class="config-identity">
               <h3 class="config-name">{{ sub.name }}</h3>
               <div class="identity-sub">
-                <span class="uid-tag">{{ sub.uid }}</span>
                 <span
                   class="status-dot-badge"
                   :class="
@@ -82,6 +81,10 @@
           </div>
 
           <div class="card-grid">
+            <div class="grid-item">
+              <span class="lbl">订阅 ID</span>
+              <span class="txt mono truncate">{{ sub.uid }}</span>
+            </div>
             <div class="grid-item">
               <span class="lbl">订阅类型</span>
               <span class="txt">{{ sub.type === 'text' ? '文本' : 'API' }}</span>
@@ -537,17 +540,6 @@ watch(
   gap: 6px;
   min-width: 0;
 }
-.uid-tag {
-  font-size: 10px;
-  font-weight: 600;
-  color: #8e8e93;
-  background: var(--bg-neutral);
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-family: var(--font-mono);
-  letter-spacing: -0.2px;
-}
-
 /* ===== 状态徽标（对齐扫描页） ===== */
 .status-dot-badge {
   font-size: 12px;

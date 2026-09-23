@@ -22,7 +22,7 @@ async def fetch_subscription(name: str, uid: str, url: str, session: aiohttp.Cli
 
     try:
         async with session.get(
-                fetch_url,
+                url,
                 headers={"User-Agent": "udpxy-scanner/1.0"},
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:

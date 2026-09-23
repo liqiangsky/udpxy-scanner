@@ -144,7 +144,6 @@ class TaskRunnerStatus:
 
     def get_progress(self) -> dict:
         with self._lock:
-            queued_after = self._config_ids[self._current_index + 1:] if self._config_ids and self._current_index < len(self._config_ids) else []
             return {
                 "running": self._running,
                 "should_stop": self._should_stop,
