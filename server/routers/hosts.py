@@ -75,8 +75,7 @@ def api_get_hosts_pool(
                 "target": target,
                 "channelName": row.channel_name,
                 "delay": row.delay,
-                "sourceType": row.source_type or "",
-                "sourceName": row.source_name or "",
+                "uid": row.uid or "",
                 "region": row.region or "",
                 "operator": row.operator or "",
                 "geoRegion": row.geo_region or "",
@@ -112,7 +111,7 @@ async def api_test_delay(source_id: int):
 
     test_url = f"{host_val.rstrip('/')}/{protocol_val}/{target_val}"
 
-    timeout_sec = int(get_setting("timeout", "2000")) / 1000.0
+    timeout_sec = int(get_setting("timeout", "5"))
 
     try:
         start_t = time.time()

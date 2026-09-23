@@ -25,40 +25,25 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useMessagesStore } from '@/stores/messages'
 import { batchSelectActive } from '@/shared'
+import { connect, disconnect } from '@/composables/useNotifications'
 
 const route = useRoute()
-const authStore = useAuthStore()
-const msgStore = useMessagesStore()
 
 onMounted(() => {
-  if (authStore.isLoggedIn) {
-    msgStore.connectSSE()
-    msgStore.fetchUnreadCount()
-  }
+  // 全局 SSE 连接（只连接一次）
+  connect()
 })
 
-watch(
-  () => authStore.isLoggedIn,
-  (loggedIn) => {
-    if (loggedIn) {
-      msgStore.connectSSE()
-      msgStore.fetchUnreadCount()
-    } else {
-      msgStore.disconnectSSE()
-    }
-  },
-)
+onUnmounted(() => {
+  disconnect()
+})
 
 const showTabbar = computed(() => {
   return (
-    authStore.isLoggedIn &&
     !route.meta?.hideNavbar &&
-    route.path !== '/login' &&
     !batchSelectActive.value
   )
 })

@@ -24,9 +24,16 @@
           <div class="form-group">
             <label>并发验证数</label>
             <div class="input-with-unit">
-              <input v-model.number="settings.engine.concurrency" type="number" min="1" max="500" />
-              <span class="unit-text">线程</span>
+              <input
+                v-model.number="settings.engine.concurrency"
+                type="number"
+                min="20"
+                max="64"
+                @blur="settings.engine.concurrency = normalize(settings.engine.concurrency, 30, 20, 64)"
+              />
+              <span class="unit-text">并发</span>
             </div>
+            <p class="field-desc">同时验证主机的数量，范围 20–64，默认 30。</p>
           </div>
 
           <div class="form-group">
@@ -35,22 +42,30 @@
               <input
                 v-model.number="settings.engine.timeout"
                 type="number"
-                min="200"
-                max="10000"
-                step="100"
+                min="2"
+                max="10"
+                step="1"
+                @blur="settings.engine.timeout = normalize(settings.engine.timeout, 5, 2, 10)"
               />
-              <span class="unit-text">ms</span>
+              <span class="unit-text">秒</span>
             </div>
+            <p class="field-desc">单次主机验证的超时时间，范围 2–10 秒，默认 5。</p>
           </div>
         </div>
 
         <div class="form-group">
           <label>配置间延迟 (Delay)</label>
           <div class="input-with-unit">
-            <input v-model.number="settings.engine.configDelay" type="number" min="0" max="300" />
+            <input
+              v-model.number="settings.engine.configDelay"
+              type="number"
+              min="1"
+              max="60"
+              @blur="settings.engine.configDelay = normalize(settings.engine.configDelay, 3, 1, 60)"
+            />
             <span class="unit-text">秒</span>
           </div>
-          <p class="field-desc">上一个扫描配置结束后，队列进入下一个配置前的等待缓冲时间。</p>
+          <p class="field-desc">上一个扫描配置结束后，队列进入下一个配置前的等待缓冲时间，范围 1–60 秒，默认 3。</p>
         </div>
       </div>
 
@@ -130,20 +145,42 @@ import { useSettingsStore } from '@/stores/settings'
 const settingsStore = useSettingsStore()
 
 const settings = reactive({
-  engine: { concurrency: 64, timeout: 2000, configDelay: 3 },
+  engine: { concurrency: 30, timeout: 5, configDelay: 3 },
   scheduling: { scanCron: '', janitorCron: '' },
   pushApiKey: '',
 })
 
 const saving = ref(false)
+
+/**
+ * 将任意加载值回落到参数默认值（空值/越界时）
+ * 顺带兼容 timeout 旧毫秒值（>=100 视为毫秒，自动换算成秒）
+ */
+const normalize = (val, def, min, max) => {
+  let v = Number(val)
+  if (!Number.isFinite(v)) return def
+  if (min === 2 && max === 10 && v >= 100) v = Math.round(v / 1000) // 毫秒 → 秒
+  if (v < min || v > max) return def
+  return v
+}
+
 const loadSettings = async () => {
   const res = await settingsStore.fetch()
-  if (res.engine) Object.assign(settings.engine, res.engine)
+  if (res.engine) {
+    settings.engine.concurrency = normalize(res.engine.concurrency, 30, 20, 64)
+    settings.engine.timeout = normalize(res.engine.timeout, 5, 2, 10)
+    settings.engine.configDelay = normalize(res.engine.configDelay, 3, 1, 60)
+  }
   if (res.scheduling) Object.assign(settings.scheduling, res.scheduling)
   if (res.pushApiKey !== undefined) settings.pushApiKey = res.pushApiKey
 }
 
 const handleSave = async () => {
+  // 保存前同样归一化：空值/越界回落默认值，与后端校验范围一致
+  settings.engine.concurrency = normalize(settings.engine.concurrency, 30, 20, 64)
+  settings.engine.timeout = normalize(settings.engine.timeout, 5, 2, 10)
+  settings.engine.configDelay = normalize(settings.engine.configDelay, 3, 1, 60)
+
   saving.value = true
   try {
     const payload = {

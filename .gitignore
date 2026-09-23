@@ -8,13 +8,26 @@ __pycache__/
 dist/
 build/
 .venv
+venv/
 
 # Database
 *.db
 *.db-shm
 *.db-wal
 *.db-journal
+data.db
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Node
+web/node_modules/
+web/dist/
+
+# Docker
+.docker/

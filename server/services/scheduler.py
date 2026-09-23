@@ -8,17 +8,20 @@ import time
 import asyncio
 import aiohttp
 import logging
-from sqlalchemy import text
 from db.database import get_db, get_setting, db_write_lock
-from core.engine import trigger_background_queue
-from core.status import task_runner
-from services.message_service import create_message, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_INFO
+from db.models import Config, Subscription, Host, Cache
+from core.engine import trigger_background_queue, trigger_subscription_queue, enqueue_subscription
+from core.status import task_runner, sub_runner
+from services.notification_service import create_notification, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, NOTIFICATION_SOURCE_RECHECK
 
 logger = logging.getLogger("定时任务")
 
 
 def cron_field_match(pattern: str, value: str) -> bool:
     if pattern == "*":
+        return True
+    # cron 标准里 0 和 7 都是周日（实际取值用 isoweekday，1-7）
+    if pattern in ("0", "7") and value == "7":
         return True
     if "/" in pattern:
         base, step = pattern.split("/", 1)
@@ -72,13 +75,14 @@ async def execute_recheck() -> int:
     首次失败进入失败列表，全部完成后二次复测，仍失败则彻底删除。
     返回淘汰数量。
     """
-    timeout_sec = int(get_setting("timeout", "2000")) / 1000.0
-    concurrency = int(get_setting("concurrency", "64"))
+    timeout_sec = int(get_setting("timeout", "5"))
+    concurrency = int(get_setting("concurrency", "30"))
 
     from services.validator import verify_single_host
 
-    with get_db() as conn:
-        active_sources = [dict(r._mapping) for r in conn.execute(text("SELECT id, host, target, protocol FROM host")).fetchall()]
+    with get_db() as session:
+        active_sources = session.query(Host.id, Host.host, Host.target, Host.protocol).all()
+        active_sources = [{"id": r.id, "host": r.host, "target": r.target, "protocol": r.protocol} for r in active_sources]
 
     if not active_sources:
         return 0
@@ -117,12 +121,19 @@ async def execute_recheck() -> int:
             await asyncio.gather(*(recheck_worker(s) for s in active_sources))
 
             if success_items:
+                # 批量更新（同 protocol/updated_at 的合并为一条 UPDATE），
+                # 避免在 db_write_lock 内逐条查询持锁过长
+                by_proto = {}
+                for delay, updatedat, protocol, id in success_items:
+                    by_proto.setdefault((protocol, updatedat, delay), []).append(id)
                 with db_write_lock:
-                    with get_db() as conn:
-                        conn.execute(
-                            text("UPDATE host SET delay=:delay, updatedAt=:updatedAt, protocol=:protocol WHERE id=:id"),
-                            [{"delay": s[0], "updatedAt": s[1], "protocol": s[2], "id": s[3]} for s in success_items]
-                        )
+                    with get_db() as session:
+                        for (protocol, updatedat, delay), ids in by_proto.items():
+                            session.query(Host).filter(Host.id.in_(ids)).update(
+                                {Host.delay: delay, Host.updated_at: updatedat, Host.protocol: protocol},
+                                synchronize_session=False,
+                            )
+                        session.commit()
 
             eliminated = 0
 
@@ -156,34 +167,35 @@ async def execute_recheck() -> int:
                 await asyncio.gather(*(second_recheck(s) for s in failed_list))
 
                 if second_success:
+                    by_proto2 = {}
+                    for delay, updatedat, protocol, id in second_success:
+                        by_proto2.setdefault((protocol, updatedat, delay), []).append(id)
                     with db_write_lock:
-                        with get_db() as conn:
-                            conn.execute(
-                                text("UPDATE host SET delay=:delay, updatedAt=:updatedAt, protocol=:protocol WHERE id=:id"),
-                                [{"delay": s[0], "updatedAt": s[1], "protocol": s[2], "id": s[3]} for s in second_success]
-                            )
+                        with get_db() as session:
+                            for (protocol, updatedat, delay), ids in by_proto2.items():
+                                session.query(Host).filter(Host.id.in_(ids)).update(
+                                    {Host.delay: delay, Host.updated_at: updatedat, Host.protocol: protocol},
+                                    synchronize_session=False,
+                                )
+                            session.commit()
                     logger.info(f"✅ [二次恢复] {len(second_success)} 个二次复测成功")
 
                 if second_failed_ids:
                     with db_write_lock:
-                        with get_db() as conn:
-                            conn.execute(
-                                text("DELETE FROM host WHERE id=:id"),
-                                [{"id": r[0]} for r in second_failed_ids]
-                            )
-                            conn.execute(
-                                text("DELETE FROM cache WHERE host=:host"),
-                                [{"host": h} for h in second_failed_hosts]
-                            )
+                        with get_db() as session:
+                            for (id,) in second_failed_ids:
+                                session.query(Host).filter(Host.id == id).delete()
+                            session.query(Cache).filter(Cache.host.in_(second_failed_hosts)).delete()
+                            session.commit()
                     eliminated = len(second_failed_ids)
                     eliminated_hosts_str = ', '.join(second_failed_hosts)
                     logger.warning(f"🗑️ [彻底淘汰] {eliminated} 个主机（两次复测均失败）: {eliminated_hosts_str}")
 
             logger.info(f"🧹 [复测完成] {len(active_sources)} 个主机复测完毕，淘汰 {eliminated} 个")
             if eliminated > 0:
-                create_message(MSG_TYPE_WARNING, f"复测完成：淘汰 {eliminated} 个主机", f"{len(active_sources)} 个主机复测完毕，{eliminated} 个已不可达已清除", "复测任务")
+                create_notification(MSG_TYPE_WARNING, f"复测完成：淘汰 {eliminated} 个主机", f"{len(active_sources)} 个主机复测完毕，{eliminated} 个已不可达已清除", source=NOTIFICATION_SOURCE_RECHECK, trigger_event=True)
             else:
-                create_message(MSG_TYPE_SUCCESS, f"复测完成：全部 {len(active_sources)} 个主机均可用", f"{len(active_sources)} 个主机复测完毕，全部在线", "复测任务")
+                create_notification(MSG_TYPE_SUCCESS, f"复测完成：{len(active_sources)} 个主机全部在线", f"{len(active_sources)} 个主机复测完毕，全部在线", source=NOTIFICATION_SOURCE_RECHECK, trigger_event=True)
             return eliminated
     finally:
         task_runner.clear_rechecking()
@@ -195,7 +207,7 @@ async def handle_heartbeat() -> dict:
     返回本次执行的任务列表。
     """
     now = datetime.datetime.now()
-    cron_now = f"{now.minute} {now.hour} {now.day} {now.month} {now.weekday() + 1}"
+    cron_now = f"{now.minute} {now.hour} {now.day} {now.month} {now.isoweekday()}"
 
     triggered = []
 
@@ -203,8 +215,8 @@ async def handle_heartbeat() -> dict:
     scan_cron = get_setting("scan_cron", "")
     if cron_match(scan_cron, cron_now) and _should_exec("scan", now):
         if task_runner.is_idle():
-            with get_db() as conn:
-                rows = conn.execute(text("SELECT id FROM config WHERE enabled=1")).fetchall()
+            with get_db() as session:
+                rows = session.query(Config).filter(Config.enabled == 1).all()
             if rows:
                 ids = [r.id for r in rows]
                 trigger_background_queue(ids, skip_disabled=True)
@@ -225,51 +237,38 @@ async def handle_heartbeat() -> dict:
         else:
             logger.info("⏭️ [心跳复测跳过] 有运行中的任务，等待下次触发")
 
-    # 订阅源定时拉取（与扫描/复测独立运行，互不阻塞）
-    with get_db() as conn:
-        subscription = conn.execute(
-            text("SELECT * FROM subscription WHERE enabled=1 AND fetchCron!=''")
-        ).fetchall()
+    # 订阅源定时拉取（队列模式：cron 命中的订阅投递到订阅队列，与扫描队列独立运行）
+    with get_db() as session:
+        subscriptions = session.query(Subscription).filter(
+            Subscription.enabled == 1,
+            Subscription.fetch_cron != ""
+        ).all()
 
-    async def _fetch_and_process(sub_dict):
-        fetch_cron = sub_dict["fetchCron"]
-        sub_id = sub_dict["id"]
+    due_sub_ids = []
+    for sub in subscriptions:
+        sub_id = sub.id
+        fetch_cron = sub.fetch_cron
         if not cron_match(fetch_cron, cron_now) or not _should_exec(f"sub_{sub_id}", now):
-            return None
-        # URL 为空说明是纯推送型订阅，无需拉取
-        if not sub_dict.get("url", ""):
-            logger.info(f"⏭️ [订阅跳过] {sub_dict['name']}(id={sub_id}) 无 URL，跳过拉取（纯推送型订阅）")
-            return (sub_dict, -1)
-        # 原子检查并标记拉取状态，防止与手动拉取冲突
-        if not task_runner.start_fetch(sub_id):
-            logger.info(f"⏭️ [订阅跳过] {sub_dict['name']}(id={sub_id}) 已在拉取中，等待下次触发")
-            return (sub_dict, -1)  # -1 表示跳过
-        logger.info(f"⏰ 订阅触发 {sub_dict['name']} -> cron: {fetch_cron}")
-        try:
-            from services.subscription_fetcher import fetch_subscription_by_type
-            from services.source_cache import process_source_data
-            sources = await fetch_subscription_by_type(sub_dict["name"], sub_dict["uid"], sub_dict["url"], sub_dict.get("type", "api"))
-            if sources:
-                hosts_data = [{"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")} for s in sources]
-                await process_source_data(sub_dict["uid"], hosts_data)
-                create_message(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub_dict['name']}", f"获取到 {len(sources)} 条数据", "定时任务")
-            return (sub_dict, len(sources) if sources else 0)
-        finally:
-            task_runner.finish_fetch(sub_id)
-
-    sub_results = await asyncio.gather(*(_fetch_and_process(dict(sub._mapping)) for sub in subscription))
-    for result in sub_results:
-        if result is None:
             continue
-        sub_dict, source_count = result
-        if source_count == -1:
-            continue  # 跳过
-        with db_write_lock:
-            with get_db() as conn:
-                conn.execute(
-                    text("UPDATE subscription SET lastFetchAt=:lastFetchAt WHERE id=:id"),
-                    {"lastFetchAt": int(time.time()), "id": sub_dict["id"]}
-                )
-        triggered.append({"task": f"sub_{sub_dict['id']}", "name": sub_dict["name"], "fetched": source_count})
+        # URL 为空说明是纯推送型订阅，无需拉取
+        if not sub.url:
+            logger.info(f"⏭️ [订阅跳过] {sub.name}(id={sub_id}) 无 URL，跳过拉取（纯推送型订阅）")
+            continue
+        due_sub_ids.append(sub_id)
+        logger.info(f"⏰ 订阅触发 {sub.name} -> cron: {fetch_cron}")
+
+    if due_sub_ids:
+        if sub_runner.is_idle():
+            trigger_subscription_queue(due_sub_ids)
+            for sub_id in due_sub_ids:
+                triggered.append({"task": f"sub_{sub_id}", "status": "queued"})
+        else:
+            queued_count = 0
+            for sub_id in due_sub_ids:
+                if enqueue_subscription(sub_id):
+                    queued_count += 1
+                    triggered.append({"task": f"sub_{sub_id}", "status": "queued"})
+                else:
+                    logger.info(f"⏭️ [订阅跳过] sub_id={sub_id} 已在队列中，等待下次触发")
 
     return triggered

@@ -122,15 +122,26 @@ def _query_ip2region(ip: str) -> dict:
         return {"region": "", "operator": "", "countryCode": "", "is_foreign": True}
 
 
-async def _health_check_batch(session: aiohttp.ClientSession, hosts: list[dict], concurrency: int = 64) -> list[dict]:
+async def _health_check_batch(session: aiohttp.ClientSession, hosts: list[dict], should_cancel=None, probe_sem: asyncio.Semaphore = None) -> list[dict]:
+    """udpxy 健康检查（真正的网络请求）。
+
+    并发控制：所有订阅共享一个全局信号量（limit = 全局 concurrency 设置）
+    + 底层共享连接池双重限流。空位先到先得，满了排队等待。
+    should_cancel：取消回调，在【获得槽位、即将发请求前】检查——
+    排队中的请求命中取消后立即放弃（不再发起），在途请求自然收尾，
+    已验证完成的结果保留（由调用方入库）。"""
     if not hosts:
         return []
 
-    sem = asyncio.Semaphore(concurrency)
+    # 固定 64：param 表的 concurrency 是扫描专用配置，订阅探测池独立于此
+    sem = probe_sem or asyncio.Semaphore(64)
     valid = []
 
     async def check_entry(entry):
         async with sem:
+            # 取消检查必须在拿到槽位之后：排队中的请求才能被拦截
+            if should_cancel and should_cancel():
+                return None
             host = entry["host"]
             try:
                 status_url = f"http://{host}/status"
@@ -150,7 +161,15 @@ async def _health_check_batch(session: aiohttp.ClientSession, hosts: list[dict],
     return valid
 
 
-async def enrich_geo_batch(sources: list[dict], session: aiohttp.ClientSession = None, skip_health_check: bool = False) -> list[dict]:
+async def enrich_geo_batch(
+    sources: list[dict],
+    session: aiohttp.ClientSession = None,
+    skip_health_check: bool = False,
+    should_cancel=None,
+    probe_sem: asyncio.Semaphore = None,
+) -> list[dict]:
+    """两阶段富化：先 geo（本地 xdb，零外网请求）排除国外/非大陆，
+    再对国内主机做健康检查（真网络请求，全局共享槽位，支持逐请求取消）。"""
     from services.source_cache import get_cached_geo_batch
 
     own_session = session is None
@@ -158,11 +177,6 @@ async def enrich_geo_batch(sources: list[dict], session: aiohttp.ClientSession =
         session = aiohttp.ClientSession()
 
     try:
-        if not skip_health_check:
-            sources = await _health_check_batch(session, sources)
-            if not sources:
-                return []
-
         enriched = []
         queried_count = 0
         skipped_count = 0
@@ -170,6 +184,8 @@ async def enrich_geo_batch(sources: list[dict], session: aiohttp.ClientSession =
         foreign_count = 0
         resolve_fail_count = 0
 
+        # ---------- 阶段一：geo 富化（本地 xdb，零外网请求）----------
+        # 先把国外/非大陆 IP 排掉，健康检查只打给国内主机，探测流量最小化
         need_geo_hosts = []
         for item in sources:
             if item.get("geoRegion") or item.get("geoOperator"):
@@ -193,36 +209,47 @@ async def enrich_geo_batch(sources: list[dict], session: aiohttp.ClientSession =
                     still_need_query.append(item)
 
             if still_need_query:
+                if should_cancel and should_cancel():
+                    logger.info(f"🌍 [geoip富化] 已取消，{len(still_need_query)} 条未查询 geo")
+                    return enriched
+
                 resolve_tasks = [(_resolve_to_ip(item.get("host", "")), item) for item in still_need_query]
                 resolve_results = await asyncio.gather(*(t[0] for t in resolve_tasks))
 
-                host_to_ip = {}
+                mainland_items = []
                 for idx, ip in enumerate(resolve_results):
                     item = resolve_tasks[idx][1]
-                    host = item.get("host", "")
-                    if ip:
-                        host_to_ip[host] = ip
-                    else:
-                        resolve_fail_count += 1
-                        enriched.append(item)
-
-                for item in still_need_query:
-                    host = item.get("host", "")
-                    ip = host_to_ip.get(host)
                     if not ip:
+                        # DNS 解析失败：无 IP 无法归属地区，直接丢弃
+                        #（不进健康检查、不入库、不计入待入库数）
+                        resolve_fail_count += 1
                         continue
                     geo = await run_in_thread(_query_ip2region, ip)
                     if geo.get("is_foreign"):
                         foreign_count += 1
-                        continue
-                    region_val = geo.get("region", "")
-                    operator_val = geo.get("operator", "")
-                    queried_count += 1
-                    enriched.append({
+                        continue  # 国外/非大陆：不进健康检查，不产生探测流量
+                    mainland_items.append({
                         **item,
-                        "geoRegion": region_val,
-                        "geoOperator": operator_val
+                        "geoRegion": geo.get("region", ""),
+                        "geoOperator": geo.get("operator", ""),
                     })
+                    queried_count += 1
+
+                # ---------- 阶段二：健康检查（真网络请求）----------
+                # 只探测国内主机；全局共享信号量 + 共享连接池双重限流，
+                # 取消在拿到槽位后检查，未发起的放弃，已完成验证的有效结果保留
+                mainland_valid = await _health_check_batch(
+                    session, mainland_items, should_cancel=should_cancel, probe_sem=probe_sem
+                )
+                if len(mainland_items) != len(mainland_valid):
+                    valid_hosts = {h["host"] for h in mainland_valid}
+                    eliminated = len(mainland_items) - len(valid_hosts & {i["host"] for i in mainland_items})
+                    logger.info(f"🔍 [健康检查淘汰] {eliminated} 个不可达主机")
+                    enriched = [
+                        e for e in enriched
+                        if not any(e.get("host") == i["host"] for i in mainland_items) or e.get("host") in valid_hosts
+                    ]
+                enriched.extend(mainland_valid)
 
         logger.info(f"🌍 [geoip富化] 共 {len(sources)} 条, 缓存命中 {cache_hit_count} 条, 本地查询 {queried_count} 条, 已有geo跳过 {skipped_count} 条, 国外IP排除 {foreign_count} 条, DNS解析失败 {resolve_fail_count} 条")
         return enriched

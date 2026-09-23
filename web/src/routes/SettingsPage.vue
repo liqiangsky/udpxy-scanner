@@ -7,41 +7,7 @@
     <div class="header-spacer"></div>
 
     <div class="settings-flow">
-      <!-- 修改密码 -->
-      <div class="settings-card">
-        <div class="card-title-group">
-          <span class="material-symbols-outlined card-icon">lock</span>
-          <h2>修改密码</h2>
-        </div>
-
-        <div class="form-group">
-          <input
-            v-model="passwordForm.oldPassword"
-            type="password"
-            class="input-base"
-            placeholder="当前密码"
-          />
-          <input
-            v-model="passwordForm.newPassword"
-            type="password"
-            class="input-base"
-            style="margin-top: 8px"
-            placeholder="新密码（至少 4 位）"
-          />
-          <button
-            type="button"
-            class="fetch-btn-mini"
-            style="margin-top: 8px"
-            :class="{ fetching: changingPassword }"
-            @click="handleChangePassword"
-          >
-            <span class="material-symbols-outlined fetch-icon">key</span>
-            <span>{{ changingPassword ? '修改中...' : '修改密码' }}</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 参数管理入口 -->
+      <!-- 后台日志入口 -->
       <div class="settings-card entry-card" @click="$router.push('/settings/params')">
         <div class="card-title-group">
           <span class="material-symbols-outlined card-icon">tune</span>
@@ -63,23 +29,6 @@
           >
         </div>
         <p class="field-desc">管理已不在主机池中的缓存主机</p>
-      </div>
-
-      <!-- 通知入口 -->
-      <div class="settings-card entry-card" @click="$router.push('/settings/notifications')">
-        <div class="card-title-group">
-          <span class="material-symbols-outlined card-icon" style="color: var(--color-blue)"
-            >notifications</span
-          >
-          <h2>通知</h2>
-          <span v-if="msgStore.unreadCount > 0" class="unread-badge">{{
-            msgStore.unreadCount
-          }}</span>
-          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-blue)"
-            >chevron_right</span
-          >
-        </div>
-        <p class="field-desc">扫描完成、复测结果、订阅拉取等系统通知</p>
       </div>
 
       <!-- 后台日志入口 -->
@@ -146,76 +95,14 @@
         </details>
       </div>
 
-      <!-- 退出登录 -->
-      <div class="settings-card logout-card" @click="handleLogout">
-        <div class="card-title-group">
-          <span class="material-symbols-outlined card-icon" style="color: var(--color-red)"
-            >logout</span
-          >
-          <h2 style="color: var(--color-red)">退出登录</h2>
-          <span class="material-symbols-outlined entry-arrow" style="color: var(--color-red)"
-            >chevron_right</span
-          >
-        </div>
-        <p class="field-desc">退出当前账号，返回登录页面</p>
-      </div>
+      <!-- Cron 表达式帮助 -->
+
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { toast } from '@/components/Toast'
-import { useAuthStore } from '@/stores/auth'
-import { useMessagesStore } from '@/stores/messages'
 import request from '@/api'
-
-const router = useRouter()
-const authStore = useAuthStore()
-const msgStore = useMessagesStore()
-
-onMounted(() => {
-  msgStore.fetchUnreadCount()
-})
-
-const passwordForm = reactive({
-  oldPassword: '',
-  newPassword: '',
-})
-const changingPassword = ref(false)
-
-const handleChangePassword = async () => {
-  if (!passwordForm.oldPassword || !passwordForm.newPassword) {
-    toast.warning('请填写新旧密码')
-    return
-  }
-  if (passwordForm.newPassword.length < 4) {
-    toast.warning('密码至少 4 位')
-    return
-  }
-  changingPassword.value = true
-  try {
-    await request.post('/change-password', {
-      oldPassword: passwordForm.oldPassword.trim(),
-      newPassword: passwordForm.newPassword.trim(),
-    })
-    toast.success('密码已修改，需重新登录')
-    passwordForm.oldPassword = ''
-    passwordForm.newPassword = ''
-    authStore.clearSession()
-    router.push('/login')
-  } catch {
-    /* 错误由拦截器统一提示 */
-  } finally {
-    changingPassword.value = false
-  }
-}
-
-const handleLogout = async () => {
-  await authStore.logout()
-  router.push('/login')
-}
 </script>
 
 <style scoped>

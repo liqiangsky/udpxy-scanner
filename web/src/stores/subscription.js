@@ -2,33 +2,28 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import request from '@/api'
 
-export const useScanConfigStore = defineStore('scanConfig', () => {
-  const configs = ref([])
+export const useSubscriptionStore = defineStore('subscription', () => {
+  const subscriptions = ref([])
   const loaded = ref(false)
 
   const progress = ref({
     running: false,
     currentId: null,
-    currentIndex: null,
-    currentName: null,
     queuedIds: [],
   })
   let pollTimer = null
 
   const fetch = async () => {
-    configs.value = await request.get('/configs')
+    subscriptions.value = await request.get('/subscriptions')
     loaded.value = true
-    return configs.value
+    return subscriptions.value
   }
 
   const loadProgress = async () => {
-    const res = await request.get('/configs/progress')
+    const res = await request.get('/subscriptions/progress')
     progress.value = {
       running: res.running,
-      currentId: res.currentId,
-      currentIndex: res.currentIndex,
-      currentName: res.currentName,
-      queuedIds: res.queuedIds || [],
+      fetchingIds: res.fetchingIds || [],
     }
 
     if (res.running) {
@@ -37,6 +32,10 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
       }
     } else {
       stopPolling()
+      // 拉取结束后刷新列表（lastFetchAt 已更新）
+      if (loaded.value) {
+        fetch().catch(() => {})
+      }
     }
   }
 
@@ -53,26 +52,27 @@ export const useScanConfigStore = defineStore('scanConfig', () => {
   }
 
   const refresh = async () => {
-    configs.value = await request.get('/configs')
+    subscriptions.value = await request.get('/subscriptions')
     loaded.value = true
   }
 
   /**
-   * 原子化更新 progress：将配置加入扫描队列
+   * 原子化更新 progress：将订阅标记为拉取中
    * 避免组件层直接修改 progress 导致竞态条件
    */
-  const addToQueue = (configId) => {
+  const addToQueue = (subId) => {
     if (progress.value.running) {
-      progress.value.queuedIds.push(configId)
+      if (!progress.value.fetchingIds.includes(subId)) {
+        progress.value.fetchingIds.push(subId)
+      }
     } else {
       progress.value.running = true
-      progress.value.currentId = configId
-      progress.value.queuedIds = []
+      progress.value.fetchingIds = [subId]
     }
   }
 
   return {
-    configs,
+    subscriptions,
     loaded,
     progress,
     fetch,

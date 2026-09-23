@@ -43,7 +43,6 @@
             <div class="host-ip font-mono">{{ source.host }}</div>
             <div class="host-actions">
               <button
-                v-if="authStore.isLoggedIn"
                 class="action-btn delete-btn"
                 @click.stop="handleDelete(source)"
               >
@@ -77,7 +76,7 @@
             </div>
             <div class="grid-item">
               <span class="badge-lbl">来源</span>
-              <span class="badge-txt">{{ source.sourceName }}</span>
+              <span class="badge-txt">{{ source.uid }}</span>
             </div>
             <div class="grid-item time-column full-width">
               <span class="badge-lbl">发现</span>
@@ -163,10 +162,8 @@ import request from '@/api'
 import RegionFilter from '@/components/RegionFilter.vue'
 import OperatorFilter from '@/components/OperatorFilter.vue'
 import { toast } from '@/components/Toast'
-import { useAuthStore } from '@/stores/auth'
 import { batchSelectActive, formatTime, copyToClipboard } from '@/shared'
-
-const authStore = useAuthStore()
+import { useNotificationListener } from '@/composables/useNotifications'
 
 const filterForm = reactive({
   region: '',
@@ -371,9 +368,6 @@ const handleCopy = async (host) => {
 }
 
 const handleTestDelay = async (item) => {
-  if (!authStore.isLoggedIn) {
-    return
-  }
   try {
     const res = await request.post(`/hosts/${item.id}/test-delay`)
     if (res.ok) {
@@ -391,9 +385,6 @@ const handleTestDelay = async (item) => {
 }
 
 const handleDelete = async (item) => {
-  if (!authStore.isLoggedIn) {
-    return
-  }
   const confirmed = confirm(`确定要删除主机 ${item.host} 吗？\n\n此操作不可恢复。`)
   if (!confirmed) {
     return
@@ -418,6 +409,12 @@ const handleDelete = async (item) => {
     /* 错误由拦截器统一提示 */
   }
 }
+
+// 监听复测完成通知，自动刷新列表
+const handleRecheckNotification = () => {
+  loadPool(true)
+}
+useNotificationListener('RECHECK', handleRecheckNotification)
 
 onMounted(() => {
   loadPool()

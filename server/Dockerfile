@@ -29,9 +29,9 @@ WORKDIR /app
 # 安装运行时工具和编译工具（编译工具确保 ARM64 架构下 Python C 扩展可正常编译）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    sqlite3 \
     curl \
     gcc \
+    libpq-dev \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -51,15 +51,10 @@ RUN mkdir -p /app/server/data && \
 ENV PYTHONPATH=/app/server
 ENV PYTHONUNBUFFERED=1
 
-# 数据目录
-ENV DB_PATH=/app/data/data.db
-
-RUN mkdir -p /app/data
-
-# entrypoint（已包含在 server/scripts/ 中自动迁移）
-RUN chmod +x /app/server/scripts/entrypoint.sh
+# PostgreSQL 连接 URL
+ENV DATABASE_URL=postgresql://user:pass@localhost/udpxy_scanner
 
 # HF Spaces 默认端口 7860
 EXPOSE 7860
 
-ENTRYPOINT ["/app/server/scripts/entrypoint.sh"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
