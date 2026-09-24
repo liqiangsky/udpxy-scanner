@@ -8,7 +8,7 @@
         </div>
         <div class="header-filters">
           <RegionFilter v-model="filterForm.region" />
-          <OperatorFilter v-model="filterForm.operator" :options="operatorOptions" />
+          <OperatorFilter v-model="filterForm.operator" />
         </div>
         <div class="header-actions">
           <button class="recheck-btn" @click="handleRecheck" title="手动复测">
@@ -32,7 +32,10 @@
           v-for="source in displayList"
           :key="source.id"
           class="hosts-grid-card"
-          :class="{ 'card-selected': selection.has(source.id) }"
+          :class="[
+            { 'card-selected': selection.has(source.id) },
+            operatorLogo(source.geoOperator) ? `op-${operatorLogo(source.geoOperator)}` : '',
+          ]"
           @pointerdown="onPointerDown($event, source)"
           @pointerup="onPointerUp"
           @pointerleave="onPointerUp"
@@ -57,11 +60,11 @@
           <div class="section-metrics-grid">
             <div class="grid-item">
               <span class="badge-lbl">地区</span>
-              <span class="badge-txt color-blue">{{ source.geoRegion }}</span>
+              <span class="badge-txt color-blue">{{ source.region }}</span>
             </div>
             <div class="grid-item">
               <span class="badge-lbl">运营商</span>
-              <span class="badge-txt color-blue">{{ source.geoOperator }}</span>
+              <span class="badge-txt color-blue">{{ source.operator }}</span>
             </div>
             <div class="grid-item">
               <span class="badge-lbl">状态</span>
@@ -170,8 +173,6 @@ const filterForm = reactive({
   operator: '',
 })
 
-// 运营商筛选选项：从 hosts 表去重 geo_operator（动态）
-const operatorOptions = ref([])
 
 const rawHostsList = ref([])
 const loading = ref(false)
@@ -308,8 +309,8 @@ const loadPool = async (reset = false) => {
   try {
     const params = { page: currentPage.value, page_size: PAGE_SIZE }
     if (filterForm.region) params.region = filterForm.region
-    // 运营商筛选用 geo_operator 列（卡片展示与动态选项同源）
-    if (filterForm.operator) params.geo_operator = filterForm.operator
+    // 运营商筛选匹配扫描配置给的 operator 列
+    if (filterForm.operator) params.operator = filterForm.operator
 
     const res = await request.get('/hosts', { params })
     const items = res.items || []
@@ -371,6 +372,15 @@ const handleCopy = async (host) => {
   }
 }
 
+// 主机运营商（IP 归属）→ 品牌 logo 类型；非三大运营商返回空，不展示水印
+const operatorLogo = (geoOperator) => {
+  if (!geoOperator) return ''
+  if (geoOperator.includes('电信')) return 'telecom'
+  if (geoOperator.includes('联通')) return 'unicom'
+  if (geoOperator.includes('移动')) return 'mobile'
+  return ''
+}
+
 const handleTestDelay = async (item) => {
   try {
     const res = await request.post(`/hosts/${item.id}/test-delay`)
@@ -414,15 +424,6 @@ const handleDelete = async (item) => {
   }
 }
 
-const loadOperatorOptions = async () => {
-  try {
-    const res = await request.get('/hosts/filter-options')
-    operatorOptions.value = res.operators || []
-  } catch {
-    /* 拉取失败时回落到 OperatorFilter 内置静态列表 */
-  }
-}
-
 // 监听复测完成通知，自动刷新列表
 const handleRecheckNotification = () => {
   loadPool(true)
@@ -431,7 +432,6 @@ useNotificationListener('RECHECK', handleRecheckNotification)
 
 onMounted(() => {
   loadPool()
-  loadOperatorOptions()
 })
 
 onBeforeUnmount(() => {
@@ -655,6 +655,31 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   transition: border-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 主机运营商（IP 归属）品牌水印：右下角，低透明度背景装饰 */
+.hosts-grid-card::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  width: 72px;
+  height: 72px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+}
+.hosts-grid-card.op-telecom::after {
+  background-image: url('../assets/China_Telecom_logo.svg.webp');
+}
+.hosts-grid-card.op-unicom::after {
+  background-image: url('../assets/China_Unicom_logo.svg.webp');
+}
+.hosts-grid-card.op-mobile::after {
+  background-image: url('../assets/China_Mobile_logo.svg.webp');
 }
 .hosts-grid-card.card-selected {
   border-color: var(--color-blue);
@@ -757,6 +782,7 @@ onBeforeUnmount(() => {
   width: 38px;
   flex-shrink: 0;
 }
+
 
 .badge-txt {
   font-size: 12px;
