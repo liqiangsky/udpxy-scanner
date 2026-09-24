@@ -148,6 +148,16 @@ def _ensure_id_sequences(engine):
             )
         ).fetchall()
         for table_name, column_name in rows:
+            # 空表时 MAX(id) 为 NULL，setval(0) 非法（序列最小值是 1），跳过
+            # （新库序列本来就是初始值，无需校正）
+            has_rows = conn.execute(
+                text(
+                    f"SELECT EXISTS (SELECT 1 FROM {table_name})"
+                )
+            ).scalar()
+            if not has_rows:
+                logger.debug(f"⏭️ {table_name} 为空表，跳过序列校正")
+                continue
             conn.execute(
                 text(
                     f"SELECT setval(pg_get_serial_sequence('{table_name}', '{column_name}'), "

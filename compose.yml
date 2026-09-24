@@ -34,11 +34,13 @@ services:
       - POSTGRES_DB=${DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backup.sql:/docker-entrypoint-initdb.d/backup.sql  # <--- 新增这行
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10          # 从 5 次增加到 10 次
+      start_period: 30s    # 新增此行：给容器启动和 SQL 导入预留 30 秒宽限期，期间健康检查失败不会直接杀死依赖
     restart: unless-stopped
 
 volumes:

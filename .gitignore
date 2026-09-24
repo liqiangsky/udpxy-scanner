@@ -31,3 +31,6 @@ web/dist/
 
 # Docker
 .docker/
+
+# Data exports
+backup.sql
