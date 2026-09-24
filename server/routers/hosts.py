@@ -75,8 +75,7 @@ def api_get_hosts_pool(
                 "target": target,
                 "channelName": row.channel_name,
                 "delay": row.delay,
-                "sourceType": row.source_type or "",
-                "sourceName": row.source_name or "",
+                "uid": row.uid or "",
                 "region": row.region or "",
                 "operator": row.operator or "",
                 "geoRegion": row.geo_region or "",
@@ -93,6 +92,18 @@ def api_get_hosts_pool(
         "totalPages": (total + page_size - 1) // page_size,
         "items": items,
     }
+
+
+@router.get("/hosts/filter-options")
+def api_hosts_filter_options():
+    """主机页运营商筛选选项：从 hosts 表去重 geo_operator"""
+    with get_db() as session:
+        operators = [
+            r[0] for r in session.query(Host.geo_operator)
+            .filter(Host.geo_operator.isnot(None), Host.geo_operator != "")
+            .distinct().order_by(Host.geo_operator).all()
+        ]
+    return {"operators": operators}
 
 
 @router.post("/hosts/{source_id}/test-delay")
@@ -112,7 +123,7 @@ async def api_test_delay(source_id: int):
 
     test_url = f"{host_val.rstrip('/')}/{protocol_val}/{target_val}"
 
-    timeout_sec = int(get_setting("timeout", "2000")) / 1000.0
+    timeout_sec = int(get_setting("timeout", "5"))
 
     try:
         start_t = time.time()

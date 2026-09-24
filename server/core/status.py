@@ -24,28 +24,6 @@ class TaskRunnerStatus:
         self._rechecking = False
         self._pause_recheck = False
 
-        # 订阅拉取追踪
-        self._fetching_subs = set()
-        self._fetching_subs_lock = threading.Lock()
-
-    def start_fetch(self, sub_id: int) -> bool:
-        """标记订阅开始拉取，返回 False 表示已在拉取中"""
-        with self._fetching_subs_lock:
-            if sub_id in self._fetching_subs:
-                return False
-            self._fetching_subs.add(sub_id)
-            return True
-
-    def finish_fetch(self, sub_id: int):
-        """标记订阅拉取完成"""
-        with self._fetching_subs_lock:
-            self._fetching_subs.discard(sub_id)
-
-    def is_fetching(self, sub_id: int) -> bool:
-        """检查订阅是否正在拉取"""
-        with self._fetching_subs_lock:
-            return sub_id in self._fetching_subs
-
     def start(self, total_count: int, config_ids: list = None):
         # 请求复测暂停，等待已有复测 worker 退出（最多等 10 秒）
         with self._lock:
@@ -130,11 +108,6 @@ class TaskRunnerStatus:
                 return self._config_ids[self._current_index]
             return None
 
-    def get_remaining_ids(self) -> list:
-        """获取当前及之后所有排队的配置 ID"""
-        with self._lock:
-            return list(self._config_ids[self._current_index:])
-
     def append_to_queue(self, config_id: int):
         """追加配置到队列尾部（线程安全）"""
         with self._lock:
@@ -171,7 +144,6 @@ class TaskRunnerStatus:
 
     def get_progress(self) -> dict:
         with self._lock:
-            queued_after = self._config_ids[self._current_index + 1:] if self._config_ids and self._current_index < len(self._config_ids) else []
             return {
                 "running": self._running,
                 "should_stop": self._should_stop,
@@ -199,4 +171,201 @@ class TaskRunnerStatus:
             return self._pause_recheck
 
 
+class SubscriptionRunnerStatus:
+    """
+    订阅拉取状态管理（波次并发模型）。
+
+    每个订阅有独立生命周期状态：
+      queued    排队中（尚未开始拉取）
+      fetching  执行中（HTTP 拉取/入库进行中）
+      done      已完成
+      failed    失败（拉取或入库抛异常）
+      stopped   已终止（被单个 stop 提前取消，或随 stop-all 取消）
+      skipped   已跳过（无 URL 的纯推送型订阅）
+
+    并发规则：同一波内所有 queued 订阅一次性并发拉取，
+    运行中追加的订阅进入下一波。HTTP 并发由共享连接池（limit=concurrency 设置）控制。
+    """
+
+    STATUS_QUEUED = "queued"
+    STATUS_FETCHING = "fetching"
+    STATUS_DONE = "done"
+    STATUS_FAILED = "failed"
+    STATUS_STOPPED = "stopped"
+    STATUS_SKIPPED = "skipped"
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._running = False
+        self._should_stop = False
+        # sub_id -> {"status": str, "name": str, "message": str}
+        self._sub_states = {}
+        # 待启动订阅（运行中追加的进入下一波，展示上直接算"拉取中"）
+        self._pending_ids = []
+        self._total = 0
+
+    # ---- 生命周期 ----
+
+    def start(self, sub_ids: list = None):
+        """启动一轮拉取（首波 = sub_ids，展示层只有 拉取中/已停止 两态）"""
+        with self._lock:
+            self._running = True
+            self._should_stop = False
+            self._sub_states = {}
+            self._pending_ids = []
+            for sid in (sub_ids or []):
+                self._sub_states[sid] = {
+                    "status": self.STATUS_FETCHING, "name": "", "message": ""
+                }
+                self._pending_ids.append(sid)
+            self._total = len(self._sub_states)
+
+    def append(self, sub_id: int, name: str = ""):
+        """运行中追加订阅：立即标记为"拉取中"（下一波启动，连接池全局限流）"""
+        with self._lock:
+            if not self._running:
+                return False
+            state = self._sub_states.get(sub_id)
+            if state and state["status"] not in (
+                self.STATUS_DONE, self.STATUS_FAILED, self.STATUS_STOPPED, self.STATUS_SKIPPED
+            ):
+                return False  # 已在本轮中
+            self._sub_states[sub_id] = {
+                "status": self.STATUS_FETCHING, "name": name, "message": ""
+            }
+            self._pending_ids.append(sub_id)
+            self._total = len(self._sub_states)
+            return True
+
+    def stop(self):
+        """停止整轮拉取：所有未结束的订阅标记 stopped（处理循环逐请求检查后丢弃结果）"""
+        with self._lock:
+            self._should_stop = True
+            self._pending_ids = []
+            for state in self._sub_states.values():
+                if state["status"] in (self.STATUS_QUEUED, self.STATUS_FETCHING):
+                    state["status"] = self.STATUS_STOPPED
+                    state["message"] = "整轮已终止"
+
+    def cancel(self, sub_id: int) -> str:
+        """单个订阅提前终止。
+        返回动作："dequeue"（已启动但尚未开拉，直接标记 stopped）、
+        "cancel"（处理中，已标记 stopped，处理循环逐请求检查后丢弃结果）、
+        "none"（不在本轮或已结束）。"""
+        with self._lock:
+            state = self._sub_states.get(sub_id)
+            if not state or state["status"] in (
+                self.STATUS_DONE, self.STATUS_FAILED, self.STATUS_STOPPED, self.STATUS_SKIPPED
+            ):
+                return "none"
+            state["status"] = self.STATUS_STOPPED
+            state["message"] = "已手动终止"
+            if sub_id in self._pending_ids:
+                self._pending_ids.remove(sub_id)
+                return "dequeue"
+            return "cancel"
+
+    # ---- 状态流转（由执行器调用） ----
+
+    def set_name(self, sub_id: int, name: str):
+        with self._lock:
+            if sub_id in self._sub_states:
+                self._sub_states[sub_id]["name"] = name
+
+    def set_fetching(self, sub_id: int):
+        with self._lock:
+            if sub_id in self._sub_states:
+                self._sub_states[sub_id]["status"] = self.STATUS_FETCHING
+
+    def set_result(self, sub_id: int, status: str, message: str = ""):
+        """写入终态；终止态（stopped）不可被其他状态覆盖，但允许更新消息（如补充已入库条数）"""
+        with self._lock:
+            state = self._sub_states.get(sub_id)
+            if not state:
+                return
+            if state["status"] == self.STATUS_STOPPED and status != self.STATUS_STOPPED:
+                return
+            state["status"] = status
+            state["message"] = message
+
+    # ---- 查询 ----
+
+    def should_stop(self) -> bool:
+        with self._lock:
+            return self._should_stop
+
+    def is_stopped(self, sub_id: int) -> bool:
+        """单个订阅是否已被终止（供处理循环逐请求协作检查，
+        命中后立即停止后续 host 请求并丢弃结果）"""
+        with self._lock:
+            state = self._sub_states.get(sub_id)
+            return bool(state and state["status"] == self.STATUS_STOPPED)
+
+    def is_running(self) -> bool:
+        with self._lock:
+            return self._running
+
+    def is_idle(self) -> bool:
+        with self._lock:
+            return not self._running
+
+    def take_pending(self) -> list:
+        """取出一批待启动的订阅（下一波并发执行），跳过已被终止的"""
+        with self._lock:
+            if self._should_stop:
+                self._pending_ids = []
+                return []
+            batch = []
+            remaining = []
+            for sid in self._pending_ids:
+                state = self._sub_states.get(sid)
+                if state and state["status"] == self.STATUS_FETCHING:
+                    batch.append(sid)
+                else:
+                    remaining.append(sid)
+            self._pending_ids = remaining
+            return batch
+
+    def finish(self):
+        """整轮结束，清理状态（progress 仍可读到最终状态摘要）"""
+        with self._lock:
+            self._running = False
+            self._should_stop = False
+            self._pending_ids = []
+            self._last_finished_states = {
+                sid: dict(state) for sid, state in self._sub_states.items()
+            }
+            self._sub_states = {}
+            self._total = 0
+
+    def get_progress(self) -> dict:
+        with self._lock:
+            states = dict(self._sub_states)
+            running = self._running
+            total = self._total
+            if not running:
+                states = dict(getattr(self, "_last_finished_states", {}) or {})
+            fetching_ids = [
+                sid for sid, state in states.items()
+                if state["status"] in (self.STATUS_QUEUED, self.STATUS_FETCHING)
+            ]
+        return {
+            "running": running,
+            "total": total,
+            "fetchingIds": fetching_ids,
+            "subs": [
+                {
+                    "id": sid,
+                    "name": state["name"],
+                    "status": state["status"],
+                    "message": state["message"],
+                }
+                for sid, state in states.items()
+            ],
+        }
+
+
+# 扫描队列状态
 task_runner = TaskRunnerStatus()
+# 订阅拉取状态（波次并发）
+sub_runner = SubscriptionRunnerStatus()

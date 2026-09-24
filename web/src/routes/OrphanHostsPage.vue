@@ -98,7 +98,7 @@
             </div>
             <div class="grid-item">
               <span class="badge-lbl">来源</span>
-              <span class="badge-txt">{{ item.sourceType }}</span>
+              <span class="badge-txt">{{ item.uid }}</span>
             </div>
             <div class="grid-item time-column full-width">
               <span class="badge-lbl">发现</span>

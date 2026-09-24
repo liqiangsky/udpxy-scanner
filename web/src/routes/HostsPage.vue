@@ -8,7 +8,7 @@
         </div>
         <div class="header-filters">
           <RegionFilter v-model="filterForm.region" />
-          <OperatorFilter v-model="filterForm.operator" />
+          <OperatorFilter v-model="filterForm.operator" :options="operatorOptions" />
         </div>
         <div class="header-actions">
           <button class="recheck-btn" @click="handleRecheck" title="手动复测">
@@ -43,7 +43,6 @@
             <div class="host-ip font-mono">{{ source.host }}</div>
             <div class="host-actions">
               <button
-                v-if="authStore.isLoggedIn"
                 class="action-btn delete-btn"
                 @click.stop="handleDelete(source)"
               >
@@ -58,11 +57,11 @@
           <div class="section-metrics-grid">
             <div class="grid-item">
               <span class="badge-lbl">地区</span>
-              <span class="badge-txt color-blue">{{ source.region }}</span>
+              <span class="badge-txt color-blue">{{ source.geoRegion }}</span>
             </div>
             <div class="grid-item">
               <span class="badge-lbl">运营商</span>
-              <span class="badge-txt color-blue">{{ source.operator }}</span>
+              <span class="badge-txt color-blue">{{ source.geoOperator }}</span>
             </div>
             <div class="grid-item">
               <span class="badge-lbl">状态</span>
@@ -77,7 +76,7 @@
             </div>
             <div class="grid-item">
               <span class="badge-lbl">来源</span>
-              <span class="badge-txt">{{ source.sourceName }}</span>
+              <span class="badge-txt">{{ source.uid }}</span>
             </div>
             <div class="grid-item time-column full-width">
               <span class="badge-lbl">发现</span>
@@ -163,15 +162,16 @@ import request from '@/api'
 import RegionFilter from '@/components/RegionFilter.vue'
 import OperatorFilter from '@/components/OperatorFilter.vue'
 import { toast } from '@/components/Toast'
-import { useAuthStore } from '@/stores/auth'
 import { batchSelectActive, formatTime, copyToClipboard } from '@/shared'
-
-const authStore = useAuthStore()
+import { useNotificationListener } from '@/composables/useNotifications'
 
 const filterForm = reactive({
   region: '',
   operator: '',
 })
+
+// 运营商筛选选项：从 hosts 表去重 geo_operator（动态）
+const operatorOptions = ref([])
 
 const rawHostsList = ref([])
 const loading = ref(false)
@@ -308,7 +308,8 @@ const loadPool = async (reset = false) => {
   try {
     const params = { page: currentPage.value, page_size: PAGE_SIZE }
     if (filterForm.region) params.region = filterForm.region
-    if (filterForm.operator) params.operator = filterForm.operator
+    // 运营商筛选用 geo_operator 列（卡片展示与动态选项同源）
+    if (filterForm.operator) params.geo_operator = filterForm.operator
 
     const res = await request.get('/hosts', { params })
     const items = res.items || []
@@ -371,9 +372,6 @@ const handleCopy = async (host) => {
 }
 
 const handleTestDelay = async (item) => {
-  if (!authStore.isLoggedIn) {
-    return
-  }
   try {
     const res = await request.post(`/hosts/${item.id}/test-delay`)
     if (res.ok) {
@@ -391,9 +389,6 @@ const handleTestDelay = async (item) => {
 }
 
 const handleDelete = async (item) => {
-  if (!authStore.isLoggedIn) {
-    return
-  }
   const confirmed = confirm(`确定要删除主机 ${item.host} 吗？\n\n此操作不可恢复。`)
   if (!confirmed) {
     return
@@ -419,8 +414,24 @@ const handleDelete = async (item) => {
   }
 }
 
+const loadOperatorOptions = async () => {
+  try {
+    const res = await request.get('/hosts/filter-options')
+    operatorOptions.value = res.operators || []
+  } catch {
+    /* 拉取失败时回落到 OperatorFilter 内置静态列表 */
+  }
+}
+
+// 监听复测完成通知，自动刷新列表
+const handleRecheckNotification = () => {
+  loadPool(true)
+}
+useNotificationListener('RECHECK', handleRecheckNotification)
+
 onMounted(() => {
   loadPool()
+  loadOperatorOptions()
 })
 
 onBeforeUnmount(() => {

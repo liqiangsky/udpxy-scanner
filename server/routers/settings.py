@@ -10,8 +10,8 @@ router = APIRouter()
 def api_get_settings():
     return {
         "engine": {
-            "concurrency": int(get_setting("concurrency", "64")),
-            "timeout": int(get_setting("timeout", "2000")),
+            "concurrency": int(get_setting("concurrency", "30")),
+            "timeout": int(get_setting("timeout", "5")),
             "configDelay": int(get_setting("config_delay", "3"))
         },
         "scheduling": {

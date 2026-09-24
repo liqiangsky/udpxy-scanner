@@ -190,7 +190,7 @@
                   :checked="formData.dataSources.includes(ds.value)"
                   @change="toggleSource(ds.value)"
                 />
-                {{ ds.label }}
+                {{ ds.value }}
               </label>
             </div>
             <p class="field-hint">不选表示扫描全部启用的订阅源</p>
@@ -240,7 +240,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import request from '@/api'
 import { toast } from '@/components/Toast'
 import { useScanConfigStore } from '@/stores/scanConfig'
@@ -283,8 +283,7 @@ const filteredConfigs = computed(() => {
 // 订阅源标签
 const dataSourceLabel = (ds) => {
   if (!ds) return '全部'
-  const found = enabledDataSources.value.find((s) => s.value === ds)
-  return found ? found.label : ds
+  return ds
 }
 
 const toggleSource = (val) => {
@@ -425,12 +424,13 @@ const handleSubmit = async () => {
 
   const payload = {
     ...formData,
-    name: formData.name?.trim(),
-    targetName: formData.targetName?.trim(),
-    targetAddress: formData.targetAddress?.trim(),
-    region: formData.region?.trim(),
-    operator: formData.operator?.trim(),
-    dataSource: formData.dataSources.join(','),
+    // 所有字符串字段统一 trim 后提交
+    name: (formData.name || '').trim(),
+    targetName: (formData.targetName || '').trim(),
+    targetAddress: (formData.targetAddress || '').trim(),
+    region: (formData.region || '').trim(),
+    operator: (formData.operator || '').trim(),
+    dataSource: formData.dataSources.map((s) => (s || '').trim()).filter(Boolean).join(','),
   }
   delete payload.dataSources
 
@@ -491,7 +491,16 @@ onMounted(async () => {
 
 onUnmounted(() => {
   scanConfigStore.stopPolling()
+  document.body.style.overflow = ''
 })
+
+// 弹窗打开时锁定 body 滚动，关闭时恢复
+watch(
+  () => formState.visible,
+  (visible) => {
+    document.body.style.overflow = visible ? 'hidden' : ''
+  }
+)
 </script>
 
 <style scoped>
@@ -818,15 +827,30 @@ onUnmounted(() => {
   align-items: flex-end;
   justify-content: center;
 }
+@media (min-width: 768px) {
+  .form-overlay {
+    align-items: center;
+  }
+}
 .form-drawer {
   background: var(--bg-card);
   width: 100%;
   max-width: 420px;
+  max-height: 90vh;
   border-top-left-radius: var(--radius-card);
   border-top-right-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
   padding: 24px 24px calc(24px + env(safe-area-inset-bottom)) 24px;
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
   animation: slide-up 0.35s var(--ease-spring);
+  overflow: hidden;
+}
+@media (min-width: 768px) {
+  .form-drawer {
+    border-radius: var(--radius-card);
+    max-height: 85vh;
+  }
 }
 .form-row-2col {
   display: grid;
@@ -838,6 +862,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 .drawer-header h2 {
   font-size: 18px;
@@ -927,6 +952,7 @@ onUnmounted(() => {
   grid-template-columns: 1fr 2fr;
   gap: 12px;
   margin-top: 12px;
+  flex-shrink: 0;
 }
 .primary-btn-submit {
   background: var(--color-blue);

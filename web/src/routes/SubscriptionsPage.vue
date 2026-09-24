@@ -3,8 +3,15 @@
     <div class="page-header">
       <h1 class="page-title">订阅</h1>
       <div class="header-actions">
-        <button class="fetch-all-btn" @click="handleFetchAll" title="一键拉取所有订阅">
-          <span class="material-symbols-outlined icon-g-btn">cloud_download</span>
+        <button
+          class="fetch-all-btn"
+          :class="{ fetching: fetchingAll }"
+          @click="handleFetchAll"
+          :title="fetchingAll ? '停止全部拉取' : '一键拉取所有订阅'"
+        >
+          <span class="material-symbols-outlined icon-g-btn">
+            {{ fetchingAll ? 'stop' : 'cloud_download' }}
+          </span>
         </button>
         <button class="action-btn primary-btn" @click="startAddSub">
           <span class="material-symbols-outlined icon-g-btn">add</span>
@@ -27,20 +34,57 @@
           v-for="sub in subscriptions"
           :key="sub.id"
           class="config-card"
-          :class="{ 'status-disabled': !sub.enabled }"
+          :class="{
+            'status-fetching': fetchingIds.includes(sub.id),
+            'status-disabled': !sub.enabled,
+          }"
         >
           <div class="card-top">
             <div class="config-identity">
               <h3 class="config-name">{{ sub.name }}</h3>
-              <span class="uid-tag">{{ sub.uid }}</span>
+              <div class="identity-sub">
+                <span
+                  class="status-dot-badge"
+                  :class="
+                    fetchingIds.includes(sub.id)
+                      ? 'fetching'
+                      : sub.enabled
+                        ? 'idle'
+                        : 'disabled'
+                  "
+                >
+                  {{
+                    fetchingIds.includes(sub.id)
+                      ? '拉取中...'
+                      : sub.enabled
+                        ? '已停止'
+                        : '已禁用'
+                  }}
+                </span>
+              </div>
             </div>
-            <label class="toggle-switch" @click.stop>
-              <input type="checkbox" :checked="sub.enabled" @change="handleToggleEnabled(sub)" />
-              <span class="slider"></span>
-            </label>
+
+            <div class="card-top-actions">
+              <button
+                class="run-toggle-btn"
+                :class="fetchingIds.includes(sub.id) ? 'fetching' : 'idle'"
+                @click="toggleFetch(sub)"
+                :title="fetchingIds.includes(sub.id) ? '停止拉取' : '立即拉取'"
+              >
+                <span
+                  v-if="fetchingIds.includes(sub.id)"
+                  class="material-symbols-outlined icon-g-toggle">stop</span
+                >
+                <span v-else class="material-symbols-outlined icon-g-toggle">cloud_download</span>
+              </button>
+            </div>
           </div>
 
           <div class="card-grid">
+            <div class="grid-item">
+              <span class="lbl">订阅 ID</span>
+              <span class="txt mono truncate">{{ sub.uid }}</span>
+            </div>
             <div class="grid-item">
               <span class="lbl">订阅类型</span>
               <span class="txt">{{ sub.type === 'text' ? '文本' : 'API' }}</span>
@@ -61,14 +105,16 @@
             </div>
           </div>
 
-          <div class="card-actions">
+          <div class="card-actions" v-show="!fetchingIds.includes(sub.id)">
             <button
-              class="text-btn fetch-btn"
-              @click="handleFetchSub(sub)"
-              :class="{ fetching: fetchingMap[sub.id] }"
+              class="text-btn toggle-enable"
+              :class="{ disabled: !sub.enabled }"
+              @click="handleToggleEnabled(sub)"
             >
-              <span class="material-symbols-outlined icon-g-btn">cloud_download</span>
-              {{ fetchingMap[sub.id] ? '拉取中' : '拉取' }}
+              <span class="material-symbols-outlined icon-g-btn">{{
+                sub.enabled ? 'toggle_on' : 'toggle_off'
+              }}</span>
+              {{ sub.enabled ? '禁用' : '启用' }}
             </button>
             <button class="text-btn edit" @click="startEditSub(sub)">
               <span class="material-symbols-outlined icon-g-btn">edit</span> 编辑
@@ -98,8 +144,8 @@
             <input v-model="formData.name" type="text" placeholder="例：鹰图平台" />
           </div>
           <div class="form-item">
-            <label>订阅唯一 ID</label>
-            <input v-model="formData.uid" type="text" placeholder="例：hunter，用于 sourceType" />
+            <label>订阅 ID（数据源标识）</label>
+            <input v-model="formData.uid" type="text" placeholder="例：github，多个订阅可共用同一 ID" />
           </div>
           <div class="form-item">
             <label>订阅类型</label>
@@ -157,14 +203,23 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { toast } from '@/components/Toast'
 import { formatTime } from '@/shared'
 import request from '@/api'
+import { useSubscriptionStore } from '@/stores/subscription'
+import { useNotificationListener } from '@/composables/useNotifications'
 
-const subscriptions = ref([])
-const loaded = ref(false)
-const fetchingMap = ref({})
+const subscriptionStore = useSubscriptionStore()
+
+const subscriptions = computed(() => subscriptionStore.subscriptions)
+const loaded = computed(() => subscriptionStore.loaded)
+const progress = computed(() => subscriptionStore.progress)
+
+const fetchingIds = computed(() => (progress.value.running ? progress.value.fetchingIds : []))
+const activeIds = computed(() => [...fetchingIds.value])
+const fetchingAll = computed(() => progress.value.running)
+
 const formVisible = ref(false)
 const editingId = ref(null)
 const formData = reactive({ name: '', uid: '', url: '', type: 'api', fetchCron: '' })
@@ -176,8 +231,7 @@ const openJsonPreview = () => {
   jsonPreview.visible = true
   jsonPreview.formatted = JSON.stringify(
     {
-      sourceType: 'hunter',
-      sourceName: '鹰图平台',
+      uid: 'hunter',
       hosts: [
         { host: '1.2.3.4:8080', geoRegion: '北京', geoOperator: '电信' },
         { host: '5.6.7.8:9000', geoRegion: '上海', geoOperator: '联通' },
@@ -190,13 +244,18 @@ const openJsonPreview = () => {
 
 const loadSubscriptions = async () => {
   try {
-    const res = await request.get('/subscriptions')
-    subscriptions.value = Array.isArray(res) ? res : []
+    await subscriptionStore.fetch()
   } catch {
-    subscriptions.value = []
+    /* 错误由拦截器统一提示 */
   }
-  loaded.value = true
 }
+
+// 拉取完成的通知会更新 lastFetchAt（订阅配置变了），需要刷新列表
+const handleSubscriptionNotification = () => {
+  loadSubscriptions()
+}
+
+useNotificationListener('SUBSCRIPTION', handleSubscriptionNotification)
 
 const startAddSub = () => {
   editingId.value = null
@@ -210,11 +269,12 @@ const startAddSub = () => {
 
 const startEditSub = (sub) => {
   editingId.value = sub.id
-  formData.name = sub.name
-  formData.uid = sub.uid
-  formData.url = sub.url
+  // 回填时先 trim，避免历史数据里的首尾空格残留到表单
+  formData.name = (sub.name || '').trim()
+  formData.uid = (sub.uid || '').trim()
+  formData.url = (sub.url || '').trim()
   formData.type = sub.type || 'api'
-  formData.fetchCron = sub.fetchCron || ''
+  formData.fetchCron = (sub.fetchCron || '').trim()
   formVisible.value = true
 }
 
@@ -224,6 +284,12 @@ const cancelForm = () => {
 }
 
 const handleSaveSub = async () => {
+  // 入库前统一 trim，避免首尾空格写进配置
+  formData.name = (formData.name || '').trim()
+  formData.uid = (formData.uid || '').trim()
+  formData.url = (formData.url || '').trim()
+  formData.fetchCron = (formData.fetchCron || '').trim()
+
   if (!formData.name || !formData.uid || !formData.url) {
     toast.warning('请填写完整')
     return
@@ -231,20 +297,20 @@ const handleSaveSub = async () => {
   try {
     if (editingId.value) {
       await request.put(`/subscriptions/${editingId.value}`, {
-        name: formData.name.trim(),
-        uid: formData.uid.trim(),
-        url: formData.url.trim(),
+        name: formData.name,
+        uid: formData.uid,
+        url: formData.url,
         type: formData.type,
-        fetchCron: formData.fetchCron.trim(),
+        fetchCron: formData.fetchCron,
       })
       toast.success('已更新')
     } else {
       await request.post('/subscriptions', {
-        name: formData.name.trim(),
-        uid: formData.uid.trim(),
-        url: formData.url.trim(),
+        name: formData.name,
+        uid: formData.uid,
+        url: formData.url,
         type: formData.type,
-        fetchCron: formData.fetchCron.trim(),
+        fetchCron: formData.fetchCron,
       })
       toast.success('已添加')
     }
@@ -257,6 +323,10 @@ const handleSaveSub = async () => {
 }
 
 const handleDeleteSub = async (sub) => {
+  if (activeIds.value.includes(sub.id)) {
+    toast.info('订阅拉取中，无法删除')
+    return
+  }
   if (!confirm(`确定删除订阅「${sub.name}」？将同时清除该订阅的缓存。`)) return
   try {
     await request.delete(`/subscriptions/${sub.id}`)
@@ -268,6 +338,10 @@ const handleDeleteSub = async (sub) => {
 }
 
 const handleToggleEnabled = async (sub) => {
+  if (activeIds.value.includes(sub.id)) {
+    toast.info('订阅拉取中，无法停用')
+    return
+  }
   const wasEnabled = sub.enabled
   try {
     await request.put(`/subscriptions/${sub.id}`, {
@@ -286,28 +360,65 @@ const handleToggleEnabled = async (sub) => {
 }
 
 const handleFetchAll = async () => {
+  if (fetchingAll.value) {
+    // 停止全部
+    try {
+      await request.post('/subscriptions/stop-all')
+      toast.info('正在停止全部拉取...')
+    } catch {
+      /* 错误由拦截器统一提示 */
+    }
+  } else {
+    // 启动全部
+    try {
+      await request.post('/subscriptions/fetch-all')
+      toast.success('批量拉取已启动')
+      subscriptionStore.startPolling()
+    } catch {
+      /* 错误由拦截器统一提示 */
+    }
+  }
+}
+
+const toggleFetch = async (sub) => {
+  if (!sub.enabled) {
+    toast.info('订阅已禁用，无法拉取')
+    return
+  }
+  const isActive = activeIds.value.includes(sub.id)
+
   try {
-    await request.post('/subscriptions/fetch-all')
-    toast.success('批量拉取已启动')
+    if (isActive) {
+      await request.post(`/subscriptions/${sub.id}/stop`)
+      toast.info('已终止拉取，进行中的请求收尾后丢弃结果')
+    } else {
+      await request.post(`/subscriptions/${sub.id}/fetch`)
+      subscriptionStore.addToQueue(sub.id)
+      toast.success(subscriptionStore.progress.running ? '已加入拉取' : '拉取已启动')
+      subscriptionStore.startPolling()
+    }
   } catch {
     /* 错误由拦截器统一提示 */
   }
 }
 
-const handleFetchSub = async (sub) => {
-  fetchingMap.value[sub.id] = true
-  try {
-    await request.post(`/subscriptions/${sub.id}/fetch`)
-    toast.success('拉取已启动')
-    await loadSubscriptions()
-  } catch {
-    /* 错误由拦截器统一提示 */
-  } finally {
-    fetchingMap.value[sub.id] = false
-  }
-}
+onMounted(async () => {
+  await subscriptionStore.startPolling()
+  await loadSubscriptions()
+})
 
-onMounted(loadSubscriptions)
+onUnmounted(() => {
+  subscriptionStore.stopPolling()
+  document.body.style.overflow = ''
+})
+
+// 弹窗打开时锁定 body 滚动，关闭时恢复（两个弹窗任一打开即锁）
+watch(
+  () => formVisible.value || jsonPreview.visible,
+  (anyOpen) => {
+    document.body.style.overflow = anyOpen ? 'hidden' : ''
+  }
+)
 </script>
 
 <style scoped>
@@ -380,6 +491,21 @@ onMounted(loadSubscriptions)
   flex-direction: column;
   transition: all 0.3s var(--ease-spring);
 }
+.config-card.status-fetching {
+  border-color: rgba(52, 199, 89, 0.3);
+  box-shadow: 0 4px 24px rgba(52, 199, 89, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+.config-card.status-fetching::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #34c759, transparent);
+}
 .config-card.status-disabled {
   opacity: 0.5;
 }
@@ -393,8 +519,9 @@ onMounted(loadSubscriptions)
 }
 .config-identity {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 75%;
   min-width: 0;
 }
 .config-name {
@@ -402,16 +529,94 @@ onMounted(loadSubscriptions)
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.uid-tag {
-  font-size: 10px;
-  font-weight: 600;
-  color: #8e8e93;
-  background: var(--bg-neutral);
-  padding: 2px 8px;
+.identity-sub {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+/* ===== 状态徽标（对齐扫描页） ===== */
+.status-dot-badge {
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
   border-radius: 10px;
-  font-family: var(--font-mono);
-  letter-spacing: -0.2px;
+  width: max-content;
+}
+.status-dot-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-dot-badge.idle {
+  color: var(--text-muted);
+  background: var(--bg-neutral);
+}
+.status-dot-badge.idle::before {
+  background: var(--text-muted);
+}
+.status-dot-badge.fetching {
+  color: #fff;
+  background: #34c759;
+}
+.status-dot-badge.fetching::before {
+  background: #fff;
+  animation: pulse 1.5s infinite;
+}
+.status-dot-badge.disabled {
+  color: #fff;
+  background: #8e8e93;
+}
+.status-dot-badge.disabled::before {
+  background: #fff;
+  opacity: 0.7;
+}
+
+/* ===== 启停按钮（对齐扫描页） ===== */
+.card-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.run-toggle-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.run-toggle-btn.idle {
+  background: var(--bg-status-good);
+  color: var(--color-green);
+}
+.run-toggle-btn.fetching {
+  background: var(--bg-status-error);
+  color: var(--color-red);
+}
+.run-toggle-btn:active {
+  transform: scale(0.9);
+}
+.icon-g-toggle {
+  font-size: 20px !important;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 600,
+    'GRAD' 0,
+    'opsz' 24;
 }
 
 /* ===== 信息网格 ===== */
@@ -453,49 +658,6 @@ onMounted(loadSubscriptions)
   white-space: nowrap;
 }
 
-/* ===== Toggle Switch ===== */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 42px;
-  height: 24px;
-  flex-shrink: 0;
-}
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: #e8e8ed;
-  transition: 0.3s;
-  border-radius: 24px;
-}
-.slider:before {
-  position: absolute;
-  content: '';
-  height: 20px;
-  width: 20px;
-  left: 2px;
-  bottom: 2px;
-  background: white;
-  transition: 0.3s;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-}
-input:checked + .slider {
-  background: #34c759;
-}
-input:checked + .slider:before {
-  transform: translateX(18px);
-}
-
 /* ===== 操作按钮 ===== */
 .card-actions {
   display: flex;
@@ -521,18 +683,17 @@ input:checked + .slider:before {
 .text-btn:active {
   transform: scale(0.94);
 }
-.text-btn.fetch-btn {
-  color: var(--color-blue);
-}
-.text-btn.fetch-btn.fetching {
-  opacity: 0.5;
-  pointer-events: none;
-}
 .text-btn.edit {
   color: var(--color-blue);
 }
 .text-btn.delete {
   color: var(--color-red);
+}
+.text-btn.toggle-enable {
+  color: var(--color-green);
+}
+.text-btn.toggle-enable.disabled {
+  color: var(--color-orange);
 }
 
 /* ===== 头部按钮 ===== */
@@ -592,8 +753,8 @@ input:checked + .slider:before {
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
-.fetch-all-btn:active {
-  transform: scale(0.9);
+.fetch-all-btn.fetching {
+  background: var(--color-red);
 }
 .fetch-all-btn:active {
   transform: scale(0.9);
@@ -605,6 +766,21 @@ input:checked + .slider:before {
   padding: 60px 20px;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ===== Drawer ===== */
@@ -621,21 +797,37 @@ input:checked + .slider:before {
   align-items: flex-end;
   justify-content: center;
 }
+@media (min-width: 768px) {
+  .form-overlay {
+    align-items: center;
+  }
+}
 .form-drawer {
   background: var(--bg-card);
   width: 100%;
   max-width: 420px;
+  max-height: 90vh;
   border-top-left-radius: var(--radius-card);
   border-top-right-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
   padding: 24px 24px calc(24px + env(safe-area-inset-bottom)) 24px;
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
   animation: slide-up 0.35s var(--ease-spring);
+  overflow: hidden;
+}
+@media (min-width: 768px) {
+  .form-drawer {
+    border-radius: var(--radius-card);
+    max-height: 85vh;
+  }
 }
 .drawer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 .drawer-header h2 {
   font-size: 18px;
@@ -659,6 +851,9 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 .drawer-form input {
   appearance: none;
@@ -720,6 +915,7 @@ input:checked + .slider:before {
   display: flex;
   gap: 10px;
   margin-top: 6px;
+  flex-shrink: 0;
 }
 .drawer-btn {
   flex: 1;
@@ -759,7 +955,9 @@ input:checked + .slider:before {
   max-width: 480px;
 }
 .json-preview-body {
-  max-height: 55vh;
+  max-height: none;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   background: #1e1e1e;
   border-radius: var(--radius-input);

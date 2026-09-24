@@ -6,18 +6,23 @@
       @change="$emit('update:modelValue', $event.target.value)"
     >
       <option value="">{{ placeholder }}</option>
-      <option v-for="opt in operators" :key="opt" :value="opt">{{ opt }}</option>
+      <option v-for="opt in activeOptions" :key="opt" :value="opt">{{ opt }}</option>
     </select>
   </div>
 </template>
 
 <script setup>
-import { operators } from '@/data.js'
+import { computed } from 'vue'
+import { operators as staticOperators } from '@/data.js'
 
-defineProps({
+const props = defineProps({
   modelValue: { type: String, default: '' },
   placeholder: { type: String, default: '全部网络' },
+  // 动态选项（如主机页从 hosts 表去重 geo_operator）；不传则用静态列表
+  options: { type: Array, default: null },
 })
+
+const activeOptions = computed(() => props.options || staticOperators)
 
 defineEmits(['update:modelValue'])
 </script>

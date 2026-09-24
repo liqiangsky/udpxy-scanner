@@ -1,11 +1,10 @@
 import logging
 import time
-import asyncio
 import aiohttp
 from fastapi import APIRouter, HTTPException, Request
 from typing import Optional
 from db.database import get_db, get_setting, db_write_lock, run_in_thread
-from db.models import ConfigCreateOrUpdate, SourceCacheDelete, Config, Subscription, Cache, Host
+from db.models import ConfigCreateOrUpdate, SourceCacheDelete, Config, Subscription, Cache
 from core.status import task_runner
 from core.engine import trigger_background_queue, enqueue_background_queue
 
@@ -15,10 +14,20 @@ router = APIRouter()
 
 @router.get("/data-sources")
 def api_list_data_sources():
-    """返回已启用的 API 订阅列表"""
+    """返回已启用的订阅源（按 uid 去重）。
+
+    多个订阅可共用同一 uid（如多个 GitHub 镜像地址都填 github），
+    扫描配置只出现一个选项，取数时该 uid 下所有启用订阅的 cache 数据一起参与扫描。"""
     with get_db() as session:
         rows = session.query(Subscription).filter(Subscription.enabled == 1).order_by(Subscription.id).all()
-        return {"sources": [{"value": s.uid, "label": s.name} for s in rows]}
+        uid_names = {}
+        for r in rows:
+            uid_names.setdefault(r.uid, []).append(r.name)
+        sources = []
+        for uid, names in uid_names.items():
+            label = names[0] if len(names) == 1 else f"{uid}（{len(names)} 个订阅）"
+            sources.append({"value": uid, "label": label})
+        return {"sources": sources}
 
 
 def _check_data_source_enabled(ds: str):
@@ -180,7 +189,6 @@ def api_get_progress():
         "running": p["running"],
         "currentId": current_id,
         "currentIndex": p["current_index"] if p["running"] else None,
-        "total": p["total"],
         "currentName": p["current_config_name"] if p["running"] else None,
         "queuedIds": queued_ids
     }
@@ -200,11 +208,11 @@ def api_cache_orphans(geo_region: Optional[str] = None, page: int = 1, page_size
             page = 1
         page_size = max(1, min(page_size, 200))
         offset = (page - 1) * page_size
-        rows = query.order_by(Cache.source_type, Cache.id.desc()).limit(page_size).offset(offset).all()
+        rows = query.order_by(Cache.uid, Cache.id.desc()).limit(page_size).offset(offset).all()
 
         return {
             "items": [{
-                "id": r.id, "sourceType": r.source_type, "host": r.host,
+                "id": r.id, "uid": r.uid, "host": r.host,
                 "geoRegion": r.geo_region, "geoOperator": r.geo_operator,
                 "active": r.active, "status": r.status,
                 "createdAt": r.created_at, "updatedAt": r.updated_at,
@@ -243,7 +251,7 @@ async def api_cache_check_online(cache_id: int):
         host_val = f"http://{host_val}"
     status_url = f"{host_val.rstrip('/')}/status"
 
-    timeout_sec = int(get_setting("timeout", "2000")) / 1000.0
+    timeout_sec = int(get_setting("timeout", "5"))
     new_status = -1
 
     try:
@@ -266,24 +274,24 @@ async def api_cache_check_online(cache_id: int):
 
 @router.post("/source-cache/delete")
 def api_cache_delete(data: SourceCacheDelete):
-    """根据 id 列表或 sourceType 列表删除 cache 数据"""
+    """根据 id 列表或 uid 列表删除 cache 数据"""
     ids = data.ids
-    source_types = data.source_types
+    uids = data.uids
 
     if ids is not None and isinstance(ids, int):
         ids = [ids]
-    if source_types is not None and isinstance(source_types, str):
-        source_types = [source_types]
+    if uids is not None and isinstance(uids, str):
+        uids = [uids]
 
-    if not ids and not source_types:
-        raise HTTPException(400, "请提供 ids 或 sourceTypes 参数")
+    if not ids and not uids:
+        raise HTTPException(400, "请提供 ids 或 uids 参数")
 
     with db_write_lock:
         with get_db() as session:
             if ids:
                 session.query(Cache).filter(Cache.id.in_(ids)).delete(synchronize_session="fetch")
-            if source_types:
-                session.query(Cache).filter(Cache.source_type.in_(source_types)).delete(synchronize_session="fetch")
+            if uids:
+                session.query(Cache).filter(Cache.uid.in_(uids)).delete(synchronize_session="fetch")
     return {"ok": True}
 
 
@@ -313,34 +321,34 @@ async def api_source_push(request: Request):
         raise HTTPException(403, "API Key 无效")
 
     body = await request.json()
-    source_type = body.get("sourceType", "unknown")
+    uid = body.get("uid", "unknown")
     hosts = body.get("hosts", [])
 
-    source_name = source_type
-    if source_type != "unknown":
+    if uid != "unknown":
         with get_db() as session:
-            sub = session.query(Subscription).filter(Subscription.uid == source_type, Subscription.enabled == 1).first()
+            sub = session.query(Subscription).filter(Subscription.uid == uid, Subscription.enabled == 1).first()
             if not sub:
-                raise HTTPException(400, f"sourceType '{source_type}' 不存在或未启用，请先在订阅管理中创建对应订阅")
-            source_name = sub.name
+                raise HTTPException(400, f"uid '{uid}' 不存在或未启用，请先在订阅管理中创建对应订阅")
 
-    logger.info(f"📥 收到 {len(hosts)} 个资产 ({source_type})")
+    logger.info(f"📥 收到 {len(hosts)} 个资产 ({uid})")
 
     async def _process_and_notify():
         try:
-            count = await process_source_data(source_type, hosts)
-            from services.message_service import create_message, MSG_TYPE_SUCCESS
-            create_message(MSG_TYPE_SUCCESS, f"数据推送完成：{source_name}", f"获取到 {count} 条数据", "订阅管理")
+            # process_source_data 内含同步查库（前置去重/cache_sources 写入，db_write_lock），
+            # 直接 await 会阻塞事件循环，丢进线程池执行
+            count = await run_in_thread(lambda: asyncio.run(process_source_data(uid, hosts)))
+            from services.notification_service import create_notification, MSG_TYPE_SUCCESS
+            create_notification(MSG_TYPE_SUCCESS, f"数据推送完成：{uid}，获取到 {count} 条", f"获取到 {count} 条数据", "订阅管理")
         except Exception as e:
-            from services.message_service import create_message, MSG_TYPE_ERROR
+            from services.notification_service import create_notification, MSG_TYPE_ERROR
             logger.error(f"❌ 处理推送数据失败: {e}")
-            create_message(MSG_TYPE_ERROR, f"数据推送失败：{source_name}", f"错误: {str(e)}", "订阅管理")
+            create_notification(MSG_TYPE_ERROR, f"数据推送失败：{uid}（{str(e)[:80]}）", f"错误: {str(e)}", "订阅管理")
 
     asyncio.create_task(_process_and_notify())
 
     return {
         "ok": True,
-        "sourceType": source_type,
+        "uid": uid,
         "received": len(hosts),
         "msg": "已接收，后台处理中"
     }

@@ -26,3 +26,13 @@ Thumbs.db
 
 # Agent
 agent/
+
+# 本地虚拟环境（部署全走 Docker，79MB 纯浪费）
+.venv/
+venv/
+
+# 本地 SQLite 库残留（数据库已迁 PostgreSQL）
+*.db
+*.db-shm
+*.db-wal
+*.db-journal

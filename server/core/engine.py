@@ -7,12 +7,12 @@ import logging
 from typing import List
 
 from db.database import get_db, get_setting, run_in_thread, db_write_lock
-from db.models import Config, Subscription, Cache
-from core.status import task_runner
+from db.models import Config, Subscription, Cache, Host
+from core.status import task_runner, sub_runner
 from services.source_cache import get_cached_hosts, cache_host_geo_batch, get_existing_hosts_batch
 from services.validator import verify_single_host
 from services.geoip import enrich_geo_batch
-from services.message_service import create_message, MSG_TYPE_INFO, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_ERROR
+from services.notification_service import create_notification, MSG_TYPE_INFO, MSG_TYPE_SUCCESS, MSG_TYPE_WARNING, MSG_TYPE_ERROR, NOTIFICATION_SOURCE_SCAN_ENGINE, NOTIFICATION_SOURCE_SUBSCRIPTION
 
 logger = logging.getLogger("扫描引擎")
 
@@ -46,64 +46,55 @@ def _fetch_enabled_subscription():
 
 
 def _batch_insert_hosts(batch_rows: list):
-    """批量插入/更新主机数据（使用 upsert 优化性能）"""
+    """批量插入/更新主机数据（使用 ORM upsert）"""
     if not batch_rows:
         return
     hosts = list(set(row[0] for row in batch_rows))
     with db_write_lock:
         with get_db() as session:
-            # 使用原始 SQL 进行批量 upsert（与旧代码逻辑一致）
-            from sqlalchemy import text
-            session.execute(text("""
-                INSERT INTO host (
-                    host, ip, port,
-                    sourceType, sourceName,
-                    region, operator,
-                    geoRegion, geoOperator,
-                    delay, protocol,
-                    target, channelName,
-                    createdAt, updatedAt
-                ) VALUES (
-                    :host, :ip, :port,
-                    :sourceType, :sourceName,
-                    :region, :operator,
-                    :geoRegion, :geoOperator,
-                    :delay, :protocol,
-                    :target, :channelName,
-                    :createdAt, :updatedAt
-                )
-                ON CONFLICT(host, target, channelName)
-                DO UPDATE SET
-                    delay = excluded.delay,
-                    updatedAt = excluded.updatedAt,
-                    geoRegion = excluded.geoRegion,
-                    geoOperator = excluded.geoOperator
-            """), [ {
-                    "host": row[0], "ip": row[1], "port": row[2],
-                    "sourceType": row[3], "sourceName": row[4],
-                    "region": row[5], "operator": row[6],
-                    "geoRegion": row[7], "geoOperator": row[8],
-                    "delay": row[9], "protocol": row[10],
-                    "target": row[11], "channelName": row[12],
-                    "createdAt": row[13], "updatedAt": row[14],
-                } for row in batch_rows ])
+            # 使用 ORM 进行批量 upsert
+            from sqlalchemy.dialects.postgresql import insert
+            
+            # 构建插入数据列表
+            values = [{
+                "host": row[0], "ip": row[1], "port": row[2],
+                "uid": row[3],
+                "region": row[4], "operator": row[5],
+                "geo_region": row[6], "geo_operator": row[7],
+                "delay": row[8], "protocol": row[9],
+                "target": row[10], "channel_name": row[11],
+                "created_at": row[12], "updated_at": row[13],
+            } for row in batch_rows]
+            
+            # 构建 upsert 语句
+            insert_stmt = insert(Host).values(values)
+            insert_stmt = insert_stmt.on_conflict_do_update(
+                index_elements=[Host.host, Host.target, Host.channel_name],
+                set_={
+                    "delay": insert_stmt.excluded.delay,
+                    "updated_at": insert_stmt.excluded.updated_at,
+                    "geo_region": insert_stmt.excluded.geo_region,
+                    "geo_operator": insert_stmt.excluded.geo_operator,
+                }
+            )
+            session.execute(insert_stmt)
+            session.commit()
 
             # 更新 cache 的 active 状态
             if hosts:
-                from db.models import Cache
                 session.query(Cache).filter(Cache.host.in_(hosts)).update(
                     {Cache.active: 1}, synchronize_session="fetch"
                 )
-            session.commit()
+                session.commit()
 
 
 async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False):
 
     global_config_delay = int(get_setting("config_delay", "3"))
-    global_concurrency = int(get_setting("concurrency", "64"))
-    global_timeout_ms = int(get_setting("timeout", "2000"))
+    global_concurrency = int(get_setting("concurrency", "30"))
+    global_timeout_sec = int(get_setting("timeout", "5"))  # 秒
 
-    timeout = aiohttp.ClientTimeout(total=global_timeout_ms / 1000.0)
+    timeout = aiohttp.ClientTimeout(total=global_timeout_sec)
 
     connector = aiohttp.TCPConnector(
         limit=512,
@@ -171,18 +162,22 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                 if raw_ds:
                     data_sources = [s.strip() for s in raw_ds.split(',') if s.strip()]
                 else:
-                    data_sources = [s["uid"] for s in all_subs]
+                    data_sources = list(subs_map.keys())
 
+                # 同 uid 去重：多个订阅共用一个 uid 时，cache 按 uid 查一次即可
+                seen_uids = set()
                 candidate_hosts = []
                 for ds_uid in data_sources:
-                    source_name = subs_map.get(ds_uid)
-                    if not source_name:
+                    if ds_uid in seen_uids:
+                        continue
+                    seen_uids.add(ds_uid)
+                    if ds_uid not in subs_map:
                         logger.warning(f"⚠️ [数据源跳过] uid='{ds_uid}' 不存在或未启用")
                         continue
                     region = config.get("template_region", "")
                     hosts = get_cached_hosts(ds_uid, region)
-                    logger.info(f"📡 [{source_name}] region='{region}', 匹配 {len(hosts)} 个 host")
-                    candidate_hosts.extend((h, ds_uid, source_name) for h in hosts)
+                    logger.info(f"📡 [{ds_uid}] region='{region}', 匹配 {len(hosts)} 个 host")
+                    candidate_hosts.extend((h, ds_uid) for h in hosts)
 
                 if not candidate_hosts:
                     logger.warning(f"⚠️ [无候选主机] {config['name']}(id={cfg_id}) 未搜索到任何候选 host")
@@ -202,8 +197,6 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                     else:
                         logger.info(f"⚡ [验证中] 去重后 {len(candidate_hosts_filtered)} 个候选，并发数={run_concurrency}")
 
-                        from db.models import Cache as CacheModel
-
                         sem = asyncio.Semaphore(run_concurrency)
                         _skipped_count = 0
 
@@ -212,7 +205,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
 
                         async def worker(host_entry):
                             nonlocal _skipped_count
-                            host_item, host_source_type, host_source_name = host_entry
+                            host_item, host_uid = host_entry
 
                             if task_runner.should_interrupt() or task_runner.should_stop():
                                 _skipped_count += 1
@@ -228,7 +221,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                         session,
                                         host_item,
                                         config["template_target_address"],
-                                        global_timeout_ms / 1000.0,
+                                        global_timeout_sec,
                                         task_runner.should_interrupt
                                     )
 
@@ -240,8 +233,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                             "host": host_item,
                                             "delay": res["delay"],
                                             "protocol": res["protocol"],
-                                            "sourceType": host_source_type,
-                                            "sourceName": host_source_name
+                                            "uid": host_uid,
                                         })
 
                                 except Exception as e:
@@ -279,7 +271,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                             geo_rows = []
                             for item in enriched:
                                 if item.get("geoRegion") or item.get("geoOperator"):
-                                    geo_rows.append((item["sourceType"], item["host"], item.get("geoRegion", ""), item.get("geoOperator", "")))
+                                    geo_rows.append((item["uid"], item["host"], item.get("geoRegion", ""), item.get("geoOperator", "")))
                                     new_geo_count += 1
                             if geo_rows:
                                 await run_in_thread(cache_host_geo_batch, geo_rows)
@@ -302,7 +294,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                         ip_val, port_val = host_item, 80
                                     batch_rows.append((
                                         host_item, ip_val, int(port_val),
-                                        item["sourceType"], item["sourceName"],
+                                        item["uid"],
                                         config.get("template_region", ""),
                                         config.get("template_operator", ""),
                                         item["geoRegion"], item["geoOperator"],
@@ -320,7 +312,7 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
                                 logger.info(f"📥 [入库] {len(enriched)} 条写入 host")
 
                         valid_count = len(_valid_hosts) if _valid_hosts else 0
-                        logger.info(f"✅ [扫描完成] {config['name']}(id={cfg_id}) -> 有效={valid_count}, 候选={len(candidate_hosts)}")
+                        logger.info(f"✅ [扫描完成] {config['name']}(id={cfg_id}) -> 有效={valid_count}, 候选={len(candidate_hosts_filtered)}")
 
             except Exception as e:
                 logger.error(f"❌ [扫描异常] {config['name']}(id={cfg_id}) -> {e}")
@@ -365,10 +357,10 @@ async def execute_scan_queue(config_ids: List[int], skip_disabled: bool = False)
 
         if total_valid > 0:
             logger.info(f"✅ [队列结束] 共发现 {total_valid} 个有效主机")
-            create_message(MSG_TYPE_SUCCESS, f"扫描完成：发现 {total_valid} 个新主机", f"本次扫描共发现 {total_valid} 个有效新源", "扫描引擎")
+            create_notification(MSG_TYPE_SUCCESS, f"扫描完成：发现 {total_valid} 个新主机", f"本次扫描共发现 {total_valid} 个有效新源", NOTIFICATION_SOURCE_SCAN_ENGINE)
         else:
             logger.info(f"📭 [队列结束] 本次扫描未产生新主机")
-            create_message(MSG_TYPE_INFO, "扫描完成：未发现新主机", "本次扫描未产生新主机", "扫描引擎")
+            create_notification(MSG_TYPE_INFO, "扫描完成：未发现新主机", "本次扫描未产生新主机", NOTIFICATION_SOURCE_SCAN_ENGINE)
 
 
 def trigger_background_queue(config_ids: List[int], skip_disabled: bool = False):
@@ -401,3 +393,174 @@ def enqueue_background_queue(config_id: int):
     task_runner.append_to_queue(config_id)
     logger.info(f"📋 [加入队列] cfg_id={config_id}, 新队列={task_runner.get_config_ids()}")
     return True
+
+
+# ==================== 订阅拉取（波次并发） ====================
+
+def _fetch_subscription(sub_id: int):
+    """读取订阅信息（线程安全）"""
+    with get_db() as session:
+        row = session.query(Subscription).filter(Subscription.id == sub_id).first()
+        if row:
+            return {
+                "id": row.id, "name": row.name, "uid": row.uid, "url": row.url,
+                "type": row.type or "api",
+            }
+        return None
+
+
+def _update_subscription_timestamp(sub_id: int):
+    with db_write_lock:
+        with get_db() as session:
+            sub = session.query(Subscription).filter(Subscription.id == sub_id).first()
+            if sub:
+                sub.last_fetch_at = int(time.time())
+                session.commit()
+
+
+async def _process_single_subscription(sub_id: int, session: aiohttp.ClientSession, probe_sem: asyncio.Semaphore):
+    """处理单个订阅：拉取 -> 前置去重 -> geo富化（排除国外） -> 健康检查 -> 入库。
+
+    session/probe_sem 为整轮共享：所有订阅的探测请求共抢 64 个槽位（先到先得，满了排队）。
+    全程通过 sub_runner 状态机跟踪，支持随时提前终止（未发起的请求放弃，已完成验证的入库）。"""
+    from services.subscription_fetcher import fetch_subscription_by_type
+    from services.source_cache import process_source_data
+
+    row = await run_in_thread(_fetch_subscription, sub_id)
+    if not row:
+        sub_runner.set_result(sub_id, sub_runner.STATUS_FAILED, "订阅不存在")
+        return
+
+    sub = row
+    sub_runner.set_name(sub_id, sub["name"])
+
+    # URL 为空说明是纯推送型订阅，无需拉取
+    if not sub["url"]:
+        sub_runner.set_result(sub_id, sub_runner.STATUS_SKIPPED, "纯推送型订阅")
+        return
+
+    try:
+        sources = await fetch_subscription_by_type(
+            sub["name"], sub["uid"], sub["url"], sub["type"], session=session
+        )
+
+        if sub_runner.is_stopped(sub_id):
+            logger.info(f"⛔ [订阅终止] {sub['name']} 拉取后取消，结果丢弃")
+            return
+
+        if sources:
+            hosts_data = [
+                {"host": s["host"], "geoRegion": s.get("geoRegion", ""), "geoOperator": s.get("geoOperator", "")}
+                for s in sources
+            ]
+            count = await process_source_data(
+                sub["uid"], hosts_data,
+                session=session,
+                probe_sem=probe_sem,
+                should_cancel=lambda: sub_runner.is_stopped(sub_id),
+            )
+            if sub_runner.is_stopped(sub_id):
+                # 提前终止：已完成验证的部分已入库，标记终态并保留入库数
+                logger.info(f"⛔ [订阅终止] {sub['name']} 提前终止，已入库 {count} 条")
+                sub_runner.set_result(sub_id, sub_runner.STATUS_STOPPED, f"已终止，入库 {count} 条")
+                create_notification(MSG_TYPE_WARNING, f"订阅拉取终止：{sub['name']}，已入库 {count} 条", "提前终止，已验证部分照常入库", source=NOTIFICATION_SOURCE_SUBSCRIPTION, trigger_event=True)
+                await run_in_thread(_update_subscription_timestamp, sub_id)
+                return
+            logger.info(f"✅ [订阅拉取] {sub['name']}: 新增 {count} 条")
+            sub_runner.set_result(sub_id, sub_runner.STATUS_DONE, f"新增 {count} 条")
+            create_notification(MSG_TYPE_SUCCESS, f"订阅拉取完成：{sub['name']}，新增 {count} 条", f"新增 {count} 条数据", source=NOTIFICATION_SOURCE_SUBSCRIPTION, trigger_event=True)
+        else:
+            logger.info(f"📭 [订阅拉取] {sub['name']}: 未获取到数据")
+            sub_runner.set_result(sub_id, sub_runner.STATUS_DONE, "未获取到数据")
+            create_notification(MSG_TYPE_WARNING, f"订阅拉取完成：{sub['name']}，未获取到数据", "未获取到数据", source=NOTIFICATION_SOURCE_SUBSCRIPTION, trigger_event=True)
+
+        await run_in_thread(_update_subscription_timestamp, sub_id)
+
+    except asyncio.CancelledError:
+        sub_runner.set_result(sub_id, sub_runner.STATUS_STOPPED, "已终止")
+        await run_in_thread(_update_subscription_timestamp, sub_id)
+        raise
+    except Exception as e:
+        logger.error(f"❌ [订阅拉取失败] {sub['name']}: {e}")
+        sub_runner.set_result(sub_id, sub_runner.STATUS_FAILED, str(e)[:100])
+        create_notification(MSG_TYPE_ERROR, f"订阅拉取失败：{sub['name']}（{str(e)[:80]}）", f"错误: {str(e)}", source=NOTIFICATION_SOURCE_SUBSCRIPTION, trigger_event=True)
+
+
+async def execute_subscription_round():
+    """订阅拉取执行器（波次并发）。
+
+    - 每波取全部 queued 订阅并发执行，运行中追加的进入下一波
+    - 所有订阅共享一个 HTTP 连接池，池大小 = 全局 concurrency 设置（网络层全局限流）
+    - 单个订阅可随时终止：健康检查逐请求检查取消标志，命中后丢弃结果不入库
+    """
+    # 固定 64：订阅拉取/探测池与扫描的 concurrency 参数（param 表）互不相干
+    sub_concurrency = 64
+
+    connector = aiohttp.TCPConnector(
+        limit=sub_concurrency,
+        ssl=False,
+        ttl_dns_cache=300,
+    )
+
+    logger.info(f"▶️ [订阅轮次启动] 共享探测槽位={sub_concurrency}")
+
+    # 全轮共享：连接池 + 探测信号量双重限流，所有订阅抢同一组槽位
+    probe_sem = asyncio.Semaphore(sub_concurrency)
+
+    async with aiohttp.ClientSession(connector=connector) as session:
+        while not sub_runner.should_stop():
+            batch = sub_runner.take_pending()
+            if not batch:
+                break
+
+            logger.info(f"🌊 [订阅波次] 并发处理 {len(batch)} 个订阅: {batch}")
+            tasks = [
+                asyncio.create_task(_process_single_subscription(sid, session, probe_sem))
+                for sid in batch
+            ]
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        if sub_runner.should_stop():
+            logger.info("⛔ [订阅轮次] 收到整轮停止，结束")
+
+    sub_runner.finish()
+
+    # 汇总通知
+    progress = sub_runner.get_progress()
+    done = sum(1 for s in progress["subs"] if s["status"] == "done")
+    failed = sum(1 for s in progress["subs"] if s["status"] == "failed")
+    stopped = sum(1 for s in progress["subs"] if s["status"] == "stopped")
+    create_notification(
+        MSG_TYPE_SUCCESS if failed == 0 and stopped == 0 else MSG_TYPE_WARNING,
+        f"批量拉取结束：完成 {done}，失败 {failed}，终止 {stopped}",
+        f"完成 {done}，失败 {failed}，终止 {stopped}",
+        source=NOTIFICATION_SOURCE_SUBSCRIPTION,
+        trigger_event=True,
+    )
+
+
+def trigger_subscription_queue(sub_ids: List[int]):
+    """启动一轮订阅拉取（空闲时调用）"""
+    shared_queue = list(sub_ids)
+    logger.info(f"▶️ [启动订阅拉取] 共 {len(shared_queue)} 个订阅: {shared_queue}")
+
+    sub_runner.start(shared_queue)
+
+    threading.Thread(
+        target=lambda: asyncio.run(
+            execute_subscription_round()
+        ),
+        daemon=True
+    ).start()
+
+
+def enqueue_subscription(sub_id: int, name: str = "") -> bool:
+    """运行中追加订阅到下一波（空闲时返回 False，调用方应改用 trigger）"""
+    if sub_runner.is_idle():
+        logger.info(f"⚠️ [订阅追加失败] 空闲状态，sub_id={sub_id}")
+        return False
+    if sub_runner.append(sub_id, name):
+        logger.info(f"📋 [订阅追加] sub_id={sub_id} 进入下一波")
+        return True
+    logger.info(f"⚠️ [订阅追加失败] sub_id={sub_id} 已在本轮中")
+    return False

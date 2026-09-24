@@ -1,30 +1,31 @@
-"""
-Initial migration - create all tables from current schema
+"""create_initial_tables
 
-Revision ID: 0001_initial
-Revises: base
-Create Date: 2026-01-01
+Revision ID: 20260920_01
+Revises:
+Create Date: 2026-09-20
 """
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = '0001_initial'
-down_revision = 'base'
+revision = '20260920_01'
+down_revision = None
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    # parameter table
-    op.create_table('parameter',
+    # 创建 parameter 表
+    op.create_table(
+        'parameter',
         sa.Column('key', sa.String(), nullable=False),
         sa.Column('value', sa.String(), nullable=True),
         sa.PrimaryKeyConstraint('key')
     )
 
-    # config table
-    op.create_table('config',
+    # 创建 config 表
+    op.create_table(
+        'config',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('name', sa.String(), nullable=False),
         sa.Column('dataSource', sa.String(), nullable=False),
@@ -37,10 +38,10 @@ def upgrade() -> None:
         sa.Column('updatedAt', sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_config_enabled', 'config', ['enabled'])
 
-    # subscription table
-    op.create_table('subscription',
+    # 创建 subscription 表
+    op.create_table(
+        'subscription',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('name', sa.String(), nullable=False),
         sa.Column('uid', sa.String(), nullable=False),
@@ -51,13 +52,12 @@ def upgrade() -> None:
         sa.Column('lastFetchAt', sa.Integer(), nullable=True),
         sa.Column('createdAt', sa.Integer(), nullable=True),
         sa.Column('updatedAt', sa.Integer(), nullable=True),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('uid', name='uq_subscription_uid')
+        sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_subscription_enabled_cron', 'subscription', ['enabled', 'fetchCron'])
 
-    # cache table
-    op.create_table('cache',
+    # 创建 cache 表
+    op.create_table(
+        'cache',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('sourceType', sa.String(), nullable=False),
         sa.Column('host', sa.String(), nullable=False),
@@ -67,13 +67,12 @@ def upgrade() -> None:
         sa.Column('status', sa.Integer(), nullable=True),
         sa.Column('createdAt', sa.Integer(), nullable=True),
         sa.Column('updatedAt', sa.Integer(), nullable=True),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('host', name='uq_cache_host')
+        sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_cache_source_type', 'cache', ['sourceType'])
 
-    # host table
-    op.create_table('host',
+    # 创建 host 表
+    op.create_table(
+        'host',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('host', sa.String(), nullable=False),
         sa.Column('ip', sa.String(), nullable=False),
@@ -92,31 +91,11 @@ def upgrade() -> None:
         sa.Column('updatedAt', sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_host_region_operator', 'host', ['region', 'operator'])
-    op.create_index('idx_host_geo', 'host', ['geoRegion', 'geoOperator'])
-    op.create_index('idx_host_host', 'host', ['host'])
-    op.create_index('idx_host_source_type', 'host', ['sourceType'])
-    op.create_index('idx_host_geo_region', 'host', ['geoRegion'])
-    op.create_index('idx_host_geo_operator', 'host', ['geoOperator'])
-    op.create_unique_constraint('uq_host_unique', 'host', ['host', 'target', 'channelName'])
 
-    # notification table
-    op.create_table('notification',
-        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('type', sa.String(), nullable=False),
-        sa.Column('title', sa.String(), nullable=False),
-        sa.Column('content', sa.String(), nullable=True),
-        sa.Column('source', sa.String(), nullable=True),
-        sa.Column('read', sa.Integer(), nullable=True),
-        sa.Column('createdAt', sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index('idx_notification_read', 'notification', ['read'])
-    op.create_index('idx_notification_created', 'notification', ['createdAt'])
+    # notification 表已移除：通知改为 SSE 实时推送 + 日志记录（见 0003）
 
 
 def downgrade() -> None:
-    op.drop_table('notification')
     op.drop_table('host')
     op.drop_table('cache')
     op.drop_table('subscription')

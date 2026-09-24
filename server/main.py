@@ -12,9 +12,9 @@ from contextlib import asynccontextmanager
 import logging
 import json
 
-from db.database import init_db, get_setting
+from db.database import init_db
 from services.log_buffer import setup_log_buffer
-from routers import settings, configs, hosts, auth, subscriptions, notifications, heartbeat, recheck
+from routers import settings, configs, hosts, subscriptions, notifications, heartbeat, recheck
 
 # 日志配置
 logging.basicConfig(
@@ -28,20 +28,18 @@ async def system_lifespan(app: FastAPI):
     # 启动
     setup_log_buffer()
     init_db()
-    # init_db 已创建全部表
     import asyncio
-    from services.event_bus import event_bus
     from services.scheduler import handle_heartbeat
+    from services.notification_service import set_main_loop
 
-    # 发送启动消息
-    asyncio.create_task(event_bus.publish("system", {"message": "服务已启动"}))
+    # 保存主 event loop 引用，供后台线程安全发布 SSE 事件
+    set_main_loop(asyncio.get_running_loop())
 
-    # 内置心跳调度器：每分钟自动触发定时任务检查，无需外部 crontab
+    # 内置心跳调度器：每分钟自动触发定时任务检查
     async def heartbeat_scheduler():
         import datetime as _dt
         logger = logging.getLogger("定时任务")
         logger.info("❤️ 内置心跳调度器已启动，每分钟检查定时任务")
-        # 对齐到下一分钟起始，确保首次检查落在整分钟边界
         now = _dt.datetime.now()
         await asyncio.sleep(60 - now.second)
         while True:
@@ -58,7 +56,7 @@ async def system_lifespan(app: FastAPI):
     task = asyncio.create_task(heartbeat_scheduler())
     yield
     task.cancel()
-    # 关闭所有 SSE 连接，让 Uvicorn 能优雅退出，避免按两次 Ctrl+C
+    from services.event_bus import event_bus
     event_bus.clear_all()
 
 app = FastAPI(title="udpxy-scanner", lifespan=system_lifespan)
@@ -70,41 +68,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# 内存 session 存储（由 auth 模块导入）
-from routers.auth import _sessions as auth_sessions, SESSION_TTL
-
-
-_CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "*",
-    "Access-Control-Allow-Headers": "*",
-}
-
-
-@app.middleware("http")
-async def check_auth(request, call_next):
-    """所有接口需要登录 session 认证"""
-    # OPTIONS 预检请求直接放行，避免 CORS preflight 被认证拦截
-    if request.method == "OPTIONS":
-        return await call_next(request)
-
-    # 豁免路径：登录、登出、外部推送、心跳保活
-    if request.url.path in ("/api/login", "/api/logout", "/api/source/push", "/api/heartbeat", "/api/events"):
-        return await call_next(request)
-
-    # 用户登录 session 认证
-    auth_token = request.headers.get("X-Auth-Token", "")
-    if auth_token and auth_token in auth_sessions:
-        import time as _time
-        session = auth_sessions[auth_token]
-        if _time.time() - session.get("created_at", 0) <= SESSION_TTL:
-            return await call_next(request)
-        else:
-            del auth_sessions[auth_token]
-
-    return JSONResponse(status_code=401, content={"detail": "未认证"}, headers=_CORS_HEADERS)
 
 
 @app.middleware("http")
@@ -121,7 +84,7 @@ async def wrap_api_response(request, call_next):
     try:
         data = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return JSONResponse(content=body.decode(), status_code=200)
+        return JSONResponse(content=json.loads(body), status_code=200)
 
     if response.status_code < 400:
         wrapped = {"code": 200, "msg": "success", "data": data}
@@ -129,15 +92,14 @@ async def wrap_api_response(request, call_next):
         detail = data.get("detail", str(response.status_code)) if isinstance(data, dict) else str(data)
         wrapped = {"code": response.status_code, "msg": detail, "data": None}
 
-    return JSONResponse(content=wrapped, status_code=200, headers=_CORS_HEADERS)
+    return JSONResponse(content=wrapped, status_code=200)
 
 
 # 🔌 像插排一样，把各个子路由插进来
-app.include_router(auth.router, prefix="/api", tags=["认证"])
 app.include_router(settings.router, prefix="/api", tags=["全局设置"])
 app.include_router(configs.router, prefix="/api", tags=["扫描配置"])
 app.include_router(hosts.router, prefix="/api", tags=["纯净主机池"])
 app.include_router(heartbeat.router, prefix="/api", tags=["心跳保活"])
 app.include_router(recheck.router, prefix="/api", tags=["复测任务"])
 app.include_router(subscriptions.router, prefix="/api", tags=["数据源订阅"])
-app.include_router(notifications.router, prefix="/api", tags=["消息中心"])
+app.include_router(notifications.router, prefix="/api", tags=["实时通知"])

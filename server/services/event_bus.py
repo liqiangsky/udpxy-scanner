@@ -57,10 +57,8 @@ class EventBus:
         for q in dead:
             self.unsubscribe(q)
 
-    async def event_generator(self, check_valid=None) -> AsyncGenerator[str, None]:
-        """SSE 生成器
-        check_valid: 可选的回调函数，每次心跳时调用，返回 False 则关闭连接
-        """
+    async def event_generator(self) -> AsyncGenerator[str, None]:
+        """SSE 生成器"""
         q = self.subscribe()
         try:
             # 发送初始心跳
@@ -76,10 +74,6 @@ class EventBus:
                     yield f"event: heartbeat\ndata: {json.dumps({'ok': True})}\n\n"
                 except asyncio.CancelledError:
                     logger.info("🛑 SSE 连接关闭：任务已取消")
-                    break
-                # 每次迭代（消息或心跳）都检查 token 有效性
-                if check_valid and not check_valid():
-                    logger.info("⛔ SSE 连接关闭：token 已失效")
                     break
         finally:
             self.unsubscribe(q)
