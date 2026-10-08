@@ -94,18 +94,6 @@ def api_get_hosts_pool(
     }
 
 
-@router.get("/hosts/filter-options")
-def api_hosts_filter_options():
-    """主机页运营商筛选选项：从 hosts 表去重 geo_operator"""
-    with get_db() as session:
-        operators = [
-            r[0] for r in session.query(Host.geo_operator)
-            .filter(Host.geo_operator.isnot(None), Host.geo_operator != "")
-            .distinct().order_by(Host.geo_operator).all()
-        ]
-    return {"operators": operators}
-
-
 @router.post("/hosts/{source_id}/test-delay")
 async def api_test_delay(source_id: int):
     """测试单个主机延迟，更新数据库并返回最新延迟"""

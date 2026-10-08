@@ -56,12 +56,14 @@ def cache_sources(uid: str, sources: List[dict]) -> int:
 
             from sqlalchemy.dialects.postgresql import insert
 
-            insert_stmt = insert(Cache).values(rows)
+            # RETURNING 拿实际插入的行：psycopg2 executemany 的 rowcount
+            # 恒为 -1（DBAPI 允许），不能直接当写入数用
+            insert_stmt = insert(Cache).values(rows).returning(Cache.host)
             insert_stmt = insert_stmt.on_conflict_do_nothing(
                 index_elements=[Cache.host]
             )
             result = session.execute(insert_stmt)
-            count = result.rowcount or 0
+            count = len(result.fetchall())
             session.commit()
 
             if count:

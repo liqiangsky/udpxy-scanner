@@ -8,7 +8,7 @@
         </div>
         <div class="header-filters">
           <RegionFilter v-model="filterForm.region" />
-          <OperatorFilter v-model="filterForm.operator" :options="operatorOptions" />
+          <OperatorFilter v-model="filterForm.operator" />
         </div>
         <div class="header-actions">
           <button class="recheck-btn" @click="handleRecheck" title="手动复测">
@@ -32,7 +32,7 @@
           v-for="source in displayList"
           :key="source.id"
           class="hosts-grid-card"
-          :class="{ 'card-selected': selection.has(source.id) }"
+          :class="[{ 'card-selected': selection.has(source.id) }]"
           @pointerdown="onPointerDown($event, source)"
           @pointerup="onPointerUp"
           @pointerleave="onPointerUp"
@@ -54,46 +54,59 @@
             </div>
           </div>
 
-          <div class="section-metrics-grid">
-            <div class="grid-item">
-              <span class="badge-lbl">地区</span>
-              <span class="badge-txt color-blue">{{ source.geoRegion }}</span>
-            </div>
-            <div class="grid-item">
-              <span class="badge-lbl">运营商</span>
-              <span class="badge-txt color-blue">{{ source.geoOperator }}</span>
-            </div>
-            <div class="grid-item">
-              <span class="badge-lbl">状态</span>
-              <div
-                class="delay-interactive-badge"
-                :class="{ 'state-error': source.delay < 0 }"
-                @click.stop="handleTestDelay(source)"
-              >
-                <span class="material-symbols-outlined icon-g">bolt</span>
-                <span class="badge-txt font-mono">{{ source.delay }} ms</span>
+          <div class="section-segment">
+            <div class="segment-label">扫描信息</div>
+            <div class="section-metrics-grid">
+              <div class="grid-item">
+                <span class="badge-lbl">地区</span>
+                <span class="badge-txt color-blue">{{ source.region }}</span>
+              </div>
+              <div class="grid-item">
+                <span class="badge-lbl">运营商</span>
+                <span class="badge-txt color-blue">{{ source.operator }}</span>
+              </div>
+              <div class="grid-item">
+                <span class="badge-lbl">来源</span>
+                <span class="badge-txt">{{ source.uid }}</span>
+              </div>
+              <div class="grid-item time-column full-width">
+                <span class="badge-lbl">发现</span>
+                <div class="time-wrapper">
+                  <span class="material-symbols-outlined icon-g">history</span>
+                  <span class="badge-txt color-gray font-mono">{{ formatTime(source.createdAt) }}</span>
+                </div>
               </div>
             </div>
-            <div class="grid-item">
-              <span class="badge-lbl">来源</span>
-              <span class="badge-txt">{{ source.uid }}</span>
-            </div>
-            <div class="grid-item time-column full-width">
-              <span class="badge-lbl">发现</span>
-              <div class="time-wrapper">
-                <span class="material-symbols-outlined icon-g">history</span>
-                <span class="badge-txt color-gray font-mono">{{
-                  formatTime(source.createdAt)
-                }}</span>
+          </div>
+
+          <div class="section-segment">
+            <div class="segment-label">主机信息</div>
+            <div class="section-metrics-grid">
+              <div class="grid-item">
+                <span class="badge-lbl">地区</span>
+                <span class="badge-txt color-blue">{{ source.geoRegion }}</span>
               </div>
-            </div>
-            <div class="grid-item time-column full-width">
-              <span class="badge-lbl">验证</span>
-              <div class="time-wrapper">
-                <span class="material-symbols-outlined icon-g">update</span>
-                <span class="badge-txt color-gray font-mono">{{
-                  formatTime(source.updatedAt)
-                }}</span>
+              <div class="grid-item">
+                <span class="badge-lbl">运营商</span>
+                <span class="badge-txt color-blue">{{ source.geoOperator }}</span>
+              </div>
+              <div class="grid-item">
+                <span class="badge-lbl">状态</span>
+                <div
+                  class="delay-interactive-badge"
+                  :class="{ 'state-error': source.delay < 0 }"
+                  @click.stop="handleTestDelay(source)"
+                >
+                  <span class="material-symbols-outlined icon-g">bolt</span>
+                  <span class="badge-txt font-mono">{{ source.delay }} ms</span>
+                </div>
+              </div>
+              <div class="grid-item time-column full-width">
+                <span class="badge-lbl">验证</span>
+                <div class="time-wrapper">
+                  <span class="material-symbols-outlined icon-g">update</span>
+                  <span class="badge-txt color-gray font-mono">{{ formatTime(source.updatedAt) }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -170,8 +183,6 @@ const filterForm = reactive({
   operator: '',
 })
 
-// 运营商筛选选项：从 hosts 表去重 geo_operator（动态）
-const operatorOptions = ref([])
 
 const rawHostsList = ref([])
 const loading = ref(false)
@@ -308,8 +319,8 @@ const loadPool = async (reset = false) => {
   try {
     const params = { page: currentPage.value, page_size: PAGE_SIZE }
     if (filterForm.region) params.region = filterForm.region
-    // 运营商筛选用 geo_operator 列（卡片展示与动态选项同源）
-    if (filterForm.operator) params.geo_operator = filterForm.operator
+    // 运营商筛选匹配扫描配置给的 operator 列
+    if (filterForm.operator) params.operator = filterForm.operator
 
     const res = await request.get('/hosts', { params })
     const items = res.items || []
@@ -414,15 +425,6 @@ const handleDelete = async (item) => {
   }
 }
 
-const loadOperatorOptions = async () => {
-  try {
-    const res = await request.get('/hosts/filter-options')
-    operatorOptions.value = res.operators || []
-  } catch {
-    /* 拉取失败时回落到 OperatorFilter 内置静态列表 */
-  }
-}
-
 // 监听复测完成通知，自动刷新列表
 const handleRecheckNotification = () => {
   loadPool(true)
@@ -431,7 +433,6 @@ useNotificationListener('RECHECK', handleRecheckNotification)
 
 onMounted(() => {
   loadPool()
-  loadOperatorOptions()
 })
 
 onBeforeUnmount(() => {
@@ -648,14 +649,15 @@ onBeforeUnmount(() => {
 .hosts-grid-card {
   background: var(--bg-card);
   border-radius: var(--radius-card);
-  padding: 18px;
+  padding: 16px 18px;
   box-shadow: var(--shadow-md);
   border: 1px solid rgba(0, 0, 0, 0.01);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   transition: border-color 0.2s ease;
 }
+
 .hosts-grid-card.card-selected {
   border-color: var(--color-blue);
   box-shadow:
@@ -733,9 +735,23 @@ onBeforeUnmount(() => {
   background: #bbdefb;
 }
 
-.section-metrics-grid {
+.section-segment {
   border-top: 1px solid #f1f5f9;
   padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.segment-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.section-metrics-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px 12px;
@@ -757,6 +773,7 @@ onBeforeUnmount(() => {
   width: 38px;
   flex-shrink: 0;
 }
+
 
 .badge-txt {
   font-size: 12px;

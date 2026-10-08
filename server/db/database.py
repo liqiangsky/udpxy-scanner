@@ -32,6 +32,19 @@ _engine = None
 _SessionFactory = None
 
 
+def _create_db_engine(db_url: str):
+    """按统一连接池参数创建 engine"""
+    return create_engine(
+        db_url,
+        poolclass=QueuePool,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        echo=False,
+    )
+
+
 def _get_engine():
     """获取或创建 SQLAlchemy engine（线程安全）"""
     global _engine, _SessionFactory
@@ -43,16 +56,21 @@ def _get_engine():
                     raise ValueError("DATABASE_URL 环境变量未设置")
                 
                 logger.info(f"📊 连接 PostgreSQL: {db_url.split('@')[-1]}")
-                
-                _engine = create_engine(
-                    db_url,
-                    poolclass=QueuePool,
-                    pool_size=10,
-                    max_overflow=20,
-                    pool_pre_ping=True,
-                    pool_recycle=3600,
-                    echo=False,
-                )
+
+                try:
+                    _engine = _create_db_engine(db_url)
+                except ModuleNotFoundError as e:
+                    # 兜底：URL 指定的驱动（如 psycopg 3）未安装时，
+                    # 降级到 psycopg2（psycopg2-binary 始终在依赖里）
+                    if "psycopg" not in str(e):
+                        raise
+                    fallback_url = db_url.replace(
+                        "postgresql+psycopg://", "postgresql+psycopg2://"
+                    )
+                    logger.warning(
+                        f"⚠️ 驱动缺失（{e}），降级使用 psycopg2"
+                    )
+                    _engine = _create_db_engine(fallback_url)
                 
                 _SessionFactory = sessionmaker(
                     bind=_engine,
