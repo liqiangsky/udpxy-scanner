@@ -31,8 +31,7 @@ FOFA_QBASE64 = os.getenv(
     "Y291bnRyeT0iQ04iICYmIHVkcHh5ICYmIENvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFt"
     # country="CN" && udpxy && Content-Type: application/octet-stream && region="Hubei"
 )
-# FOFA_URL = f"https://fofa.so/result?qbase64={FOFA_QBASE64}"
-FOFA_URL = f"https://fofa.so/result?qbase64=Y291bnRyeT0iQ04iICYmIHVkcHh5ICYmIENvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFt"
+FOFA_URL = f"https://fofa.so/result?qbase64={FOFA_QBASE64}"
 
 # ── 常量 ──────────────────────────────────────────────────
 # 匹配 IP:PORT 或 域名:PORT
