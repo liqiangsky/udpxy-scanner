@@ -111,6 +111,7 @@
 111.193.162.68:8012
 111.193.169.187:4022
 111.193.224.49:8888
+111.193.227.77:23234
 111.193.234.141:8888
 111.193.238.245:8888
 111.193.239.94:8888
@@ -635,6 +636,7 @@
 116.230.245.24:4022
 116.230.54.58:33988
 116.233.6.23:5022
+116.233.67.80:8899
 116.235.46.2:4022
 116.237.156.179:9088
 116.237.37.244:8888
@@ -952,7 +954,6 @@
 125.33.179.15:5555
 125.36.77.20:8888
 125.36.87.64:8888
-125.37.56.24:8788
 125.37.56.52:18888
 125.37.57.186:18888
 125.46.132.197:9999
@@ -1501,6 +1502,7 @@
 183.191.45.189:8082
 183.220.107.138:4022
 183.220.20.17:4321
+183.222.15.202:4321
 183.222.206.14:8096
 183.234.194.165:8888
 183.236.43.98:4013
@@ -1619,7 +1621,6 @@
 220.167.170.215:4000
 220.169.100.41:10087
 220.169.109.72:802
-220.173.103.80:4022
 220.173.25.19:4022
 220.173.254.128:10001
 220.173.254.148:6666
@@ -1629,7 +1630,6 @@
 220.176.218.76:9000
 220.190.54.26:8188
 220.191.106.108:55555
-220.192.12.20:8003
 220.192.180.99:8888
 220.201.145.20:6688
 221.10.226.195:5000
@@ -1698,6 +1698,8 @@
 222.80.13.33:4022
 222.82.204.248:4000
 222.90.48.33:9999
+222.92.158.109:9889
+222.92.158.110:9889
 222.95.43.217:9000
 223.10.23.41:8085
 223.10.24.101:8083
@@ -2075,7 +2077,6 @@ c.qrjcwy.eu.org:8099
 cards.imwork.net:15893
 cctv.speedtest.netynee.top:9999
 cd.sy012.com:4000
-cf.21534450.xyz:9988
 cloud.sunrisecom.cn:8888
 cloud.sunrisecom.wang:8888
 cn.zzmd.fun:8888
@@ -2112,14 +2113,13 @@ emby.xlangnan.cn:10316
 emby.xlangnan.cn:8189
 enlen.vip:4022
 esxi.juzhijian.com:8822
+flyriven.synology.me:8001
 fpt.vungtau.ml:4022
 fxhack.f3322.org:8000
 gang.pecmd.cn:6000
 gd.wsd.gd.cn:1698
 gddx.zubo.cc.cd:8888
 gdyd.7259.cc.cd:4013
-gdyd.7259.cc.cd:4014
-gdyd.7259.cc.cd:4111
 gilbert0571.eu.org:8888
 github.com
 graph.facebook.com
@@ -2140,6 +2140,7 @@ hhnas.eu.org:10000
 hiliu.myds.me:18088
 home.111818.xyz:8888
 home.152824.xyz:64022
+home.660888.xyz:4000
 home.8v8.fun:4333
 home.amucn.net:8800
 home.ddx2013.cc:4022
@@ -2163,6 +2164,7 @@ hsza.f3322.net:4000
 hy.baojihzjc.com:9001
 hzmaidu.com:8090
 hzzzz530.com:4022
+ik.iptv8.net:8888
 ik.kimkimkk.top:2222
 ik6.iptv8.net:8888
 iku.sunnyli.link:4144
@@ -2201,7 +2203,6 @@ kd2.gcc125.top:6888
 kd3.gcc125.top:6888
 kjrzxhb.top:2086
 kms.erfiy.com:8884
-kodbox.guangyuan.site:8188
 kouki.pro:8888
 kuanglong.vicp.hk:2121
 kx966.cn:12314
@@ -2266,6 +2267,7 @@ opentv.x3322.net:4022
 origin.lean.org.cn:4000
 otv.wotom.net:4433
 password.266999.xyz:55555
+phmanet.com:9999
 piero96.x3322.net:554
 plex.cyruslee.top:8888
 plex.home.yulei.online:9999
@@ -2318,6 +2320,7 @@ vl15191373.imwork.net:8880
 vpn.famcloud.top:9878
 vpn.jk960.cn:8686
 w.yao87.com:4022
+wan1.tangwudi.cc:47859
 wanda01.e7q.com:18090
 wangbo.vip:8000
 web.dv88.cn:4321
@@ -2341,6 +2344,7 @@ www.8700956.top:18888
 www.8888866.xyz:10000
 www.91dos.cn:4022
 www.akw323.com:9527
+www.andy-nas.top:8623
 www.argon2022.buzz:8888
 www.dsmcloud.top:8888
 www.dyc.com.cn:8002
@@ -2368,7 +2372,6 @@ www.lnlee.top:10000
 www.ltxs.pro:4022
 www.lwfz.fun:8800
 www.ly123.fun:10000
-www.maomizi.cn:9527
 www.maomizi.cn:9528
 www.maomizi.cn:9529
 www.maomizi.cn:9530
@@ -2380,6 +2383,7 @@ www.petzhu.top:7000
 www.photoby.us:28012
 www.pr666.site:4040
 www.pswluo.cn:4000
+www.pve.onetopcloud.com:16666
 www.qfly9236.cn:8888
 www.qhjx.top:18000
 www.recker.cc:4022
@@ -2409,7 +2413,6 @@ www.xingwen.online:9810
 www.xinhuaifeiyang.top:6800
 www.xiongnas.top:8888
 www.xuweihome.vip:2222
-www.yahao.host:4022
 www.yao87.com:4022
 www.yiyibest.com:7777
 www.yyf1991.top:9999
