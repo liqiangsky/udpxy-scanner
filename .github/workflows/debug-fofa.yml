@@ -1,0 +1,56 @@
+name: Debug FOFA
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */12 * * *'
+
+jobs:
+  debug_fofa:
+    runs-on: ubuntu-latest
+    environment: "env"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright aiohttp
+          playwright install chromium
+
+      - name: Run FOFA debug script
+        env:
+          FOFA_QBASE64: ${{ secrets.FOFA_QBASE64 }}
+        run: |
+          python .github/scripts/debug_fofa.py
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fofa-debug-output
+          path: .github/debug/
+          retention-days: 7
+
+      - name: Show summary
+        if: always()
+        run: |
+          echo "=== FOFA Debug Summary ==="
+          if [ -f .github/debug/fofa_debug_meta.json ]; then
+            echo "Metadata:"
+            cat .github/debug/fofa_debug_meta.json
+          fi
+
+          if [ -f .github/debug/fofa_debug_page.txt ]; then
+            echo ""
+            echo "=== Text preview ==="
+            head -100 .github/debug/fofa_debug_page.txt
+          fi
