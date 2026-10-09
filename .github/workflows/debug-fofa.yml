@@ -23,8 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright aiohttp
-          playwright install chromium
+          pip install cloudscraper aiohttp
 
       - name: Run FOFA debug script
         env:
